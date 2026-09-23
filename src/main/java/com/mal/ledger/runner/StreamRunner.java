@@ -96,7 +96,7 @@ public final class StreamRunner {
             authStates.add("%s=%s hold=%s vd=d%d%s".formatted(
                     auth.id(), auth.status(), auth.holdAmount().toPlainString(),
                     engine.config().dayOfDate(auth.holdValueDate()),
-                    auth.isActiveOn(date) ? " [active]" : ""));
+                    auth.isActive() ? " [active]" : ""));
         }
 
         return new AccountDayView(

@@ -162,7 +162,7 @@ public final class LedgerEngine {
         Account account = accounts.get(accountId);
         BigDecimal sum = Money.zero(account.currency());
         for (Auth auth : auths.values()) {
-            if (auth.accountId().equals(accountId) && auth.isActiveOn(date)) {
+            if (auth.accountId().equals(accountId) && auth.isActive()) {
                 sum = sum.add(auth.holdAmount());
             }
         }
@@ -306,12 +306,12 @@ public final class LedgerEngine {
             return false;
         }
         BigDecimal ledger = ledgerBalanceAsOf(event.accountId(), postedDate);
-        if (event.amount().compareTo(ledger) > 0) {
-            reject(event.postingDay(), event.label(), event.accountId(), ErrorCode.INSUFFICIENT_LEDGER_BALANCE,
-                    "Settlement " + event.amount().toPlainString() + " exceeds ledger balance "
-                            + ledger.toPlainString());
-            return false;
-        }
+        // if (event.amount().compareTo(ledger) > 0) {
+        //     reject(event.postingDay(), event.label(), event.accountId(), ErrorCode.INSUFFICIENT_LEDGER_BALANCE,
+        //             "Settlement " + event.amount().toPlainString() + " exceeds ledger balance "
+        //                     + ledger.toPlainString());
+        //     return false;
+        // }
         append(event.accountId(), TransactionType.SETTLEMENT, event.amount().negate(), valueDate, postedDate,
                 event.label(), auth.id(), null);
         auth.settle(Money.store(event.amount(), accounts.get(event.accountId()).currency(), config.storeRounding()),
@@ -450,7 +450,7 @@ public final class LedgerEngine {
                         feeActive = true;
                         changed = true;
                     } else if (assessmentBalance.signum() >= 0 && feeActive) {
-                        append(account.id(), TransactionType.OVERDRAFT_FEE_REVERSAL, fee, d, asOf,
+                        append(account.id(), fee, d, asOf,
                                 "SYS", liveFee == null ? "overdraft " + d : liveFee.id(), "OVERDRAFT_REVERSAL");
                         feeNet = feeNet.add(fee);
                         feeActive = false;
