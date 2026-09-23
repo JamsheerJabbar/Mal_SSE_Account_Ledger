@@ -251,6 +251,38 @@ parsing.
 **Trade-off.** A custom parser is code to maintain and is less forgiving than Jackson
 (it supports only what the stream files use, plus `//` and `/* */` comments).
 
+### 2.12 Recalculation cycle limit: a second, independent safety valve
+
+**Decision.** `maxRecomputePasses` (§2.4) bounds one `reconcile()` call - how many times
+*rebuild → assess → capitalize* repeats before the ledger settles. It says nothing about
+the whole stream: a day can be disturbed by any number of *separate* back-dated writes
+over its life, each triggering its own `reconcile()` call that converges in a pass or two.
+A second, independent counter, `maxRecalculationCycles` (default 3), bounds that: a day's
+own native close is cycle 1, and every later back-dated write that lands on it - a fresh
+credit or debit, a settlement, a reversal - is one more. A write that would push a day
+past the limit is refused outright, before anything is appended
+(`RECALCULATION_LIMIT_EXCEEDED`), and every admitted cycle is logged
+(`LedgerEngine.recalculationCycles()`) with the record it produced, the account, the
+value date and the cycle number.
+
+**Why.** Notes.md's own cascade example - day 2 entered, a day-5 write touches it, a
+day-7 reversal touches it again, an 8th-day write touches it a 4th time - is exactly the
+shape this guards against. Nothing stops a stream from back-dating into the same day over
+and over; without a cap, a pathological or malformed stream could keep rewriting one
+day's history indefinitely. The check runs *before* the write, not after: a day that
+would be recalculated too many times never gets the chance to be, so the ledger the
+check protects can never itself be the thing that needed protecting.
+
+**Trade-off.** The gate sits at the event-application layer (`simple`, `installmentCredit`,
+`settle`, `reverse`), not inside `append` itself, so each of those four methods has to
+call it explicitly - a fifth write path that forgot to would silently bypass the limit.
+It is also deliberately scoped to *user-initiated* writes only: the fee and interest
+records `rebuildProjections`/`reconcileCapitalization` post automatically are not gated,
+so a day that keeps tipping in and out of overdraft across several closes cannot itself
+exhaust the budget - only a person or an upstream system repeatedly back-dating into the
+same day can. A same-day or forward-dated write never counts at all: a day's own native
+processing is not a "recalculation" of anything.
+
 ## 3. Deliberately out of scope
 
 - Persistence, concurrency, multi-threading - the engine is single-threaded and

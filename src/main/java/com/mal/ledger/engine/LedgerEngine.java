@@ -33,6 +33,9 @@ import java.util.TreeMap;
  *       reconciliation, so they can never drift from the records.</li>
  *   <li>Precision and currency travel with the account; every stored amount is rounded
  *       correlatively at store time.</li>
+ *   <li>A back-dated write that would recalculate a day past
+ *       {@link LedgerConfig#maxRecalculationCycles()} is refused before anything is
+ *       appended, not caught afterwards. See {@link RecalculationCycle}.</li>
  * </ul>
  */
 public final class LedgerEngine {
@@ -54,6 +57,10 @@ public final class LedgerEngine {
     private final Map<String, Auth> auths = new LinkedHashMap<>();
     /** Daily accounts hash grouped by account then date. */
     private final Map<String, NavigableMap<LocalDate, DailyAccount>> dailyAccounts = new LinkedHashMap<>();
+    /** How many times each (account, value date) has been calculated - native close is 1. */
+    private final Map<String, Map<LocalDate, Integer>> recalculationCycleCounts = new LinkedHashMap<>();
+    /** Audit trail of every recalculation beyond a day's native close. */
+    private final List<RecalculationCycle> recalculationCycles = new ArrayList<>();
 
     private final List<EngineError> errors = new ArrayList<>();
     private int transactionSeq = 0;
@@ -99,6 +106,16 @@ public final class LedgerEngine {
         return Collections.unmodifiableList(errors);
     }
 
+    /** Every recalculation beyond each day's native close, in the order it happened. */
+    public List<RecalculationCycle> recalculationCycles() {
+        return Collections.unmodifiableList(recalculationCycles);
+    }
+
+    /** How many times (account, valueDate) has been calculated so far - native close is 1. */
+    public int recalculationCycleCount(String accountId, LocalDate valueDate) {
+        return recalculationCycleCounts.getOrDefault(accountId, Map.of()).getOrDefault(valueDate, 1);
+    }
+
     public DailyAccount dailyAccount(String accountId, LocalDate date) {
         NavigableMap<LocalDate, DailyAccount> map = dailyAccounts.get(accountId);
         return map == null ? null : map.get(date);
@@ -139,6 +156,40 @@ public final class LedgerEngine {
 
     private void reject(int day, String eventLabel, String accountId, ErrorCode code, String message) {
         errors.add(new EngineError(day, config.dateOfDay(day), eventLabel, accountId, code, message));
+    }
+
+    /**
+     * Gate for a back-dated write to (accountId, valueDate). Same-day or forward writes
+     * are not a recalculation of anything and pass straight through. A back-dated write
+     * that would push this day's cycle count past {@code maxRecalculationCycles} is
+     * refused outright - {@code RECALCULATION_LIMIT_EXCEEDED} - and nothing is appended.
+     * Otherwise the cycle count is committed immediately, before the caller writes
+     * anything; call this only once the caller is certain the write will proceed (no
+     * other rejection reason still pending), since an admitted cycle is not refunded.
+     *
+     * @return the new cycle number to log once the write completes, or -1 if refused
+     */
+    private int admitBackdatedCycle(LedgerEvent event, String accountId, LocalDate valueDate, LocalDate postedDate) {
+        if (!valueDate.isBefore(postedDate)) {
+            return 0;
+        }
+        Map<LocalDate, Integer> perAccount = recalculationCycleCounts.computeIfAbsent(accountId, a -> new LinkedHashMap<>());
+        int next = perAccount.getOrDefault(valueDate, 1) + 1;
+        if (next > config.maxRecalculationCycles()) {
+            reject(event.postingDay(), event.label(), accountId, ErrorCode.RECALCULATION_LIMIT_EXCEEDED,
+                    "%s for %s has already been calculated %d time(s); the configured maximum is %d"
+                            .formatted(valueDate, accountId, next - 1, config.maxRecalculationCycles()));
+            return -1;
+        }
+        perAccount.put(valueDate, next);
+        return next;
+    }
+
+    /** Logs a cycle admitted by {@link #admitBackdatedCycle}, once the write it gated has landed. */
+    private void logCycle(int cycleNumber, String transactionId, String accountId, LocalDate valueDate) {
+        if (cycleNumber > 0) {
+            recalculationCycles.add(new RecalculationCycle(transactionId, accountId, valueDate, cycleNumber));
+        }
     }
 
     // =====================================================================
@@ -217,9 +268,15 @@ public final class LedgerEngine {
                     "Amount must be positive");
             return false;
         }
+        LocalDate valueDate = config.dateOfDay(event.valueDay());
+        LocalDate postedDate = config.dateOfDay(event.postingDay());
+        int cycle = admitBackdatedCycle(event, event.accountId(), valueDate, postedDate);
+        if (cycle < 0) {
+            return false;
+        }
         BigDecimal signed = event.amount().multiply(BigDecimal.valueOf(type.sign()));
-        append(event.accountId(), type, signed, config.dateOfDay(event.valueDay()),
-                config.dateOfDay(event.postingDay()), event.label(), null, null);
+        Transaction t = append(event.accountId(), type, signed, valueDate, postedDate, event.label(), null, null);
+        logCycle(cycle, t.id(), event.accountId(), valueDate);
         return event.isBackdated();
     }
 
@@ -237,15 +294,22 @@ public final class LedgerEngine {
         BigDecimal slice = total.divide(BigDecimal.valueOf(n), currency.precision(), config.installmentRounding());
         LocalDate valueDate = config.dateOfDay(event.valueDay());
         LocalDate postedDate = config.dateOfDay(event.postingDay());
+        int cycle = admitBackdatedCycle(event, event.accountId(), valueDate, postedDate);
+        if (cycle < 0) {
+            return false;
+        }
+        Transaction first = null;
         for (int i = 0; i < n; i++) {
-            append(event.accountId(), TransactionType.INSTALLMENT_CREDIT, slice, valueDate, postedDate,
+            Transaction t = append(event.accountId(), TransactionType.INSTALLMENT_CREDIT, slice, valueDate, postedDate,
                     event.label(), "installment " + (i + 1) + "/" + n, null);
+            if (first == null) first = t;
         }
         BigDecimal remainder = total.subtract(slice.multiply(BigDecimal.valueOf(n)));
         if (remainder.signum() != 0) {
             append(event.accountId(), TransactionType.BALANCING_ADJUSTMENT, remainder, valueDate, postedDate,
                     event.label(), "installment remainder", "BUFFER_PAY");
         }
+        logCycle(cycle, first.id(), event.accountId(), valueDate);
         return event.isBackdated();
     }
 
@@ -316,10 +380,15 @@ public final class LedgerEngine {
         //                     + ledger.toPlainString());
         //     return false;
         // }
-        append(event.accountId(), TransactionType.SETTLEMENT, event.amount().negate(), valueDate, postedDate,
+        int cycle = admitBackdatedCycle(event, event.accountId(), valueDate, postedDate);
+        if (cycle < 0) {
+            return false;
+        }
+        Transaction t = append(event.accountId(), TransactionType.SETTLEMENT, event.amount().negate(), valueDate, postedDate,
                 event.label(), auth.id(), null);
         auth.settle(Money.store(event.amount(), accounts.get(event.accountId()).currency(), config.storeRounding()),
                 postedDate);
+        logCycle(cycle, t.id(), event.accountId(), valueDate);
         return event.isBackdated();
     }
 
@@ -342,14 +411,19 @@ public final class LedgerEngine {
             return false;
         }
         LocalDate postedDate = config.dateOfDay(event.postingDay());
-        boolean backdated = false;
-        for (Transaction t : toReverse) {
-            LocalDate valueDate = config.dateOfDay(event.valueDay());
-            append(t.accountId(), TransactionType.REVERSAL, t.signedAmount().negate(), valueDate, postedDate,
-                    event.label(), t.id(), "reverses " + event.targetLabel());
-            backdated |= valueDate.isBefore(postedDate);
+        LocalDate valueDate = config.dateOfDay(event.valueDay());
+        int cycle = admitBackdatedCycle(event, event.accountId(), valueDate, postedDate);
+        if (cycle < 0) {
+            return false;
         }
-        return backdated;
+        Transaction first = null;
+        for (Transaction t : toReverse) {
+            Transaction r = append(t.accountId(), TransactionType.REVERSAL, t.signedAmount().negate(), valueDate, postedDate,
+                    event.label(), t.id(), "reverses " + event.targetLabel());
+            if (first == null) first = r;
+        }
+        logCycle(cycle, first.id(), event.accountId(), valueDate);
+        return valueDate.isBefore(postedDate);
     }
 
     private boolean isAlreadyReversed(Transaction target) {

@@ -29,6 +29,12 @@ import java.util.Map;
  *       end of day 5 before any fee assessed = -370"). Fees from <em>earlier</em> days do
  *       count, which is why day 4 closes at -180 and not -155. This makes assessment
  *       idempotent and non-oscillating.</li>
+ *   <li>{@code maxRecalculationCycles} - 3. A day's own native close is cycle 1; each
+ *       later back-dated write that lands on that day (a fresh credit/debit, a settlement,
+ *       or a reversal) is another cycle. A day that has already been recalculated this
+ *       many times refuses the next back-dated write outright, before anything is
+ *       appended, with {@code RECALCULATION_LIMIT_EXCEEDED}. See
+ *       {@link LedgerEngine#recalculationCycles()}.</li>
  * </ul>
  */
 public final class LedgerConfig {
@@ -46,6 +52,7 @@ public final class LedgerConfig {
     private final boolean discardAccrualRemainder;
     private final Map<Currency, BigDecimal> overdraftFees;
     private final int maxRecomputePasses;
+    private final int maxRecalculationCycles;
 
     private LedgerConfig(Builder b) {
         this.weekStartDate = b.weekStartDate;
@@ -61,6 +68,7 @@ public final class LedgerConfig {
         this.discardAccrualRemainder = b.discardAccrualRemainder;
         this.overdraftFees = new EnumMap<>(b.overdraftFees);
         this.maxRecomputePasses = b.maxRecomputePasses;
+        this.maxRecalculationCycles = b.maxRecalculationCycles;
     }
 
     public static Builder builder() {
@@ -79,6 +87,7 @@ public final class LedgerConfig {
     public boolean overdraftFeeOnDaysWithoutMovement() { return overdraftFeeOnDaysWithoutMovement; }
     public boolean discardAccrualRemainder() { return discardAccrualRemainder; }
     public int maxRecomputePasses() { return maxRecomputePasses; }
+    public int maxRecalculationCycles() { return maxRecalculationCycles; }
 
     public LocalDate dateOfDay(int day) {
         return weekStartDate.plusDays(day - 1L);
@@ -115,6 +124,7 @@ public final class LedgerConfig {
         b.discardAccrualRemainder = discardAccrualRemainder;
         b.overdraftFees.putAll(overdraftFees);
         b.maxRecomputePasses = maxRecomputePasses;
+        b.maxRecalculationCycles = maxRecalculationCycles;
         return b;
     }
 
@@ -132,6 +142,7 @@ public final class LedgerConfig {
         private boolean discardAccrualRemainder = false;
         private final Map<Currency, BigDecimal> overdraftFees = new EnumMap<>(Currency.class);
         private int maxRecomputePasses = 16;
+        private int maxRecalculationCycles = 3;
 
         public Builder weekStartDate(LocalDate v) { this.weekStartDate = v; return this; }
         public Builder windowDays(int v) { this.windowDays = v; return this; }
@@ -146,6 +157,7 @@ public final class LedgerConfig {
         public Builder discardAccrualRemainder(boolean v) { this.discardAccrualRemainder = v; return this; }
         public Builder overdraftFee(Currency c, BigDecimal v) { this.overdraftFees.put(c, v); return this; }
         public Builder maxRecomputePasses(int v) { this.maxRecomputePasses = v; return this; }
+        public Builder maxRecalculationCycles(int v) { this.maxRecalculationCycles = v; return this; }
 
         public LedgerConfig build() {
             return new LedgerConfig(this);

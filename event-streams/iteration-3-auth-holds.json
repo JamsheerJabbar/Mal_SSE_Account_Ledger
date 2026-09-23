@@ -15,6 +15,7 @@
     "overdraftFeeOnDaysWithoutMovement": false,
     "discardAccrualRemainder": false,
     "maxRecomputePasses": 16,
+    "maxRecalculationCycles": 3,
     "overdraftFees": {
       "AED": "25.00",
       "BHD": "2.500"

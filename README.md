@@ -18,7 +18,7 @@ which of Notes.md's own acceptance criteria turned out wrong, and why, is in
 mvn compile exec:java@generate-streams                          # (re)write event-streams/*.json
 mvn compile exec:java@run-streams                                # run all five, print the day reports
 mvn compile exec:java@run-streams -Dstream=iteration-1-baseline  # run just one
-mvn test                                                          # 80 tests
+mvn test                                                          # 82 tests
 mvn test -Dtest=Iteration2RetroCascadeTest                        # one iteration on its own
 
 mvn package -DskipTests                                          # build target/mal-account-ledger.jar
@@ -101,6 +101,18 @@ whichever holds are currently approved as of the report being read, not what was
 true on that day historically (`ARCHITECTURE.md` §2.6) — closing balances and interest are
 unaffected either way, since holds only ever subtract from available balance.
 
+**A day can only be disturbed so many times.** `maxRecomputePasses` (default 16) bounds
+one reconciliation call; a separate, independent counter, `maxRecalculationCycles`
+(default **3**), bounds a day's whole life. A day's own native close is cycle 1; every
+later back-dated write that lands on it — a fresh credit or debit, a settlement, a
+reversal — is one more. A write that would push a day past the limit is refused
+*before* anything is appended (`RECALCULATION_LIMIT_EXCEEDED`), and every admitted cycle
+is logged with the record it produced, the account, the value date and the cycle number
+(`LedgerEngine.recalculationCycles()`). This is user-initiated writes only — the
+system's own fee and interest corrections are never gated, so a day that keeps tipping
+in and out of overdraft across several closes cannot itself exhaust the budget. See
+`ARCHITECTURE.md` §2.12 and `RecalculationCycleLimitTest`.
+
 ## Resolved ambiguities
 
 Every choice Notes.md flags is a config flag in `LedgerConfig`, and `AmbiguityChoicesTest`
@@ -166,5 +178,6 @@ src/test/java/com/mal/ledger/
   AcceptanceCriteriaTest         the Notes.md verdicts above
   AmbiguityChoicesTest           each choice run both ways
   WrittenAmbiguitiesTest         tests for the two ambiguities written in AMBIGUITIES.md
+  RecalculationCycleLimitTest    the day-2/5/7/8 cascade, and the 4th cycle it refuses
   EventStreamEditingTest         round-trip and edit-takes-effect
 ```

@@ -111,6 +111,7 @@ public final class EventStreamStore {
         b.overdraftFeeOnDaysWithoutMovement(Json.boolVal(c, "overdraftFeeOnDaysWithoutMovement", false));
         b.discardAccrualRemainder(Json.boolVal(c, "discardAccrualRemainder", false));
         b.maxRecomputePasses(Json.intVal(c, "maxRecomputePasses", 16));
+        b.maxRecalculationCycles(Json.intVal(c, "maxRecalculationCycles", 3));
         Map<String, Object> fees = Json.obj(c, "overdraftFees");
         for (Map.Entry<String, Object> e : fees.entrySet()) {
             b.overdraftFee(Currency.of(e.getKey()), new BigDecimal(String.valueOf(e.getValue())));
@@ -234,6 +235,7 @@ public final class EventStreamStore {
         m.put("overdraftFeeOnDaysWithoutMovement", c.overdraftFeeOnDaysWithoutMovement());
         m.put("discardAccrualRemainder", c.discardAccrualRemainder());
         m.put("maxRecomputePasses", BigDecimal.valueOf(c.maxRecomputePasses()));
+        m.put("maxRecalculationCycles", BigDecimal.valueOf(c.maxRecalculationCycles()));
         Map<String, Object> fees = new LinkedHashMap<>();
         for (Currency cur : Currency.values()) {
             fees.put(cur.name(), c.overdraftFeeFor(cur).toPlainString());

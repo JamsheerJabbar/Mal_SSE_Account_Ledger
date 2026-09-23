@@ -15,5 +15,7 @@ public enum ErrorCode {
     UNKNOWN_REVERSAL_TARGET,
     ALREADY_REVERSED,
     INVALID_AMOUNT,
-    RECOMPUTE_DID_NOT_CONVERGE
+    RECOMPUTE_DID_NOT_CONVERGE,
+    /** A back-dated write would recalculate a day past LedgerConfig.maxRecalculationCycles. */
+    RECALCULATION_LIMIT_EXCEEDED
 }

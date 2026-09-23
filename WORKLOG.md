@@ -38,3 +38,14 @@ that used to clear at exactly zero headroom no longer does. 80/80 green. Updated
 ARCHITECTURE.md section 4 to "resolved" (folded into 2.2 and 2.6), REJECTED.md R2,
 AMBIGUITIES.md (the before/after-own-fee entry is now moot; added the holds one), and
 README's tables and numbers.
+
+6.15pm Architecture, trade offs production readiness doc preparationAdded the recalculation cycle limit: a day's native close is cycle 1, each later
+back-dated write that lands on it is another, and a 4th (maxRecalculationCycles, default
+3) is refused before anything is appended - matching the day2/day5/day7/day8 cascade
+example directly. New RecalculationCycle record (transaction id, account id, value date,
+cycle number), gated in the four write paths (simple/installmentCredit/settle/reverse),
+scoped to user-initiated writes only - the engine's own fee/interest corrections don't
+count, so an oscillating overdraft can't itself burn the budget. Wired into LedgerConfig
+and the JSON store like every other tunable. 82/82 green, no existing stream comes close
+to the default limit. Documented in ARCHITECTURE.md as 2.12 (appended at the end rather
+than renumbering, to avoid breaking the existing section cross-references).
