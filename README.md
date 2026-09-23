@@ -4,18 +4,24 @@ In-memory, append-only account ledger for the problem in [`Notes.md`](Notes.md):
 event stream day by day across a 6-day window and print, for each day, the closing ledger
 balance, the fee assessments, the auth states and the errors.
 
-No persistence, no database, no UI. Java 21, Gradle, zero third-party production
+No persistence, no database, no UI. Java 21, Maven, zero third-party production
 dependencies (the JSON codec is in `com.mal.ledger.io.Json`).
 
 ## Quick start
 
 ```bash
-gradle generateStreams                              # (re)write event-streams/*.json
-gradle runStreams                                   # run all five, print the day reports
-gradle runStreams -Pstream=iteration-1-baseline     # run just one
-gradle test                                         # 75 tests
-gradle test --tests '*Iteration2*'                  # one iteration on its own
+mvn compile exec:java@generate-streams                          # (re)write event-streams/*.json
+mvn compile exec:java@run-streams                                # run all five, print the day reports
+mvn compile exec:java@run-streams -Dstream=iteration-1-baseline  # run just one
+mvn test                                                          # 75 tests
+mvn test -Dtest=Iteration2RetroCascadeTest                        # one iteration on its own
+
+mvn package -DskipTests                                          # build target/mal-account-ledger.jar
+java -jar target/mal-account-ledger.jar run event-streams        # run the jar directly
 ```
+
+Test output is hidden by default; add `-Dledger.redirectOutput=false` to see it, or override
+the stream directory with `-Dledger.streams.dir=...`.
 
 ## The five iterations
 
@@ -119,6 +125,7 @@ day-6 reversal restores the same end state — the readings differ only mid-week
 ## Layout
 
 ```
+pom.xml                            Maven build
 event-streams/                     the five iterations, editable JSON
 src/main/java/com/mal/ledger/
   domain/       Account, Transaction, Auth, DailyAccount, Currency, Money

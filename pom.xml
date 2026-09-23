@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.mal</groupId>
+  <artifactId>mal-account-ledger</artifactId>
+  <version>1.0.0</version>
+  <packaging>jar</packaging>
+
+  <name>MAL Account Ledger</name>
+  <description>In-memory, append-only account ledger - event-stream engine and test suite.</description>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <junit.version>5.10.2</junit.version>
+    <!-- Where the event-stream JSON files live. Override: mvn test -Dledger.streams.dir=... -->
+    <ledger.streams.dir>${project.basedir}/event-streams</ledger.streams.dir>
+    <!-- mvn exec:java@run-streams -Dstream=iteration-1-baseline   (blank = run every stream) -->
+    <stream></stream>
+    <!-- Show test stdout/stderr on the console: mvn test -Dledger.redirectOutput=false -->
+    <ledger.redirectOutput>true</ledger.redirectOutput>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>${junit.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <!-- Production code has ZERO third-party dependencies (own JSON codec in com.mal.ledger.io.Json). -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.platform</groupId>
+      <artifactId>junit-platform-launcher</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <finalName>${project.artifactId}</finalName>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <configuration>
+          <systemPropertyVariables>
+            <ledger.streams.dir>${ledger.streams.dir}</ledger.streams.dir>
+          </systemPropertyVariables>
+          <redirectTestOutputToFile>${ledger.redirectOutput}</redirectTestOutputToFile>
+        </configuration>
+      </plugin>
+
+      <!-- Executable jar: java -jar target/mal-account-ledger-1.0.0.jar run event-streams -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <archive>
+            <manifest>
+              <mainClass>com.mal.ledger.runner.Main</mainClass>
+            </manifest>
+          </archive>
+        </configuration>
+      </plugin>
+
+      <!--
+        Equivalent of the Gradle `generateStreams` / `runStreams` tasks:
+          mvn compile exec:java@generate-streams
+          mvn compile exec:java@run-streams
+          mvn compile exec:java@run-streams -Dstream=iteration-1-baseline
+      -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.2.0</version>
+        <configuration>
+          <mainClass>com.mal.ledger.runner.Main</mainClass>
+          <classpathScope>compile</classpathScope>
+        </configuration>
+        <executions>
+          <execution>
+            <id>generate-streams</id>
+            <configuration>
+              <arguments>
+                <argument>generate</argument>
+                <argument>${ledger.streams.dir}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+          <execution>
+            <id>run-streams</id>
+            <configuration>
+              <arguments>
+                <argument>run</argument>
+                <argument>${ledger.streams.dir}</argument>
+                <argument>${stream}</argument>
+              </arguments>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

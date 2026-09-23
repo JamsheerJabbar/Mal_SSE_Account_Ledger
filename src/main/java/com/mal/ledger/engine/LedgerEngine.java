@@ -162,7 +162,7 @@ public final class LedgerEngine {
         Account account = accounts.get(accountId);
         BigDecimal sum = Money.zero(account.currency());
         for (Auth auth : auths.values()) {
-            if (auth.accountId().equals(accountId) && auth.isActive()) {
+            if (auth.accountId().equals(accountId) && auth.isActiveOn(date)) {
                 sum = sum.add(auth.holdAmount());
             }
         }
@@ -450,7 +450,7 @@ public final class LedgerEngine {
                         feeActive = true;
                         changed = true;
                     } else if (assessmentBalance.signum() >= 0 && feeActive) {
-                        append(account.id(), fee, d, asOf,
+                        append(account.id(), TransactionType.OVERDRAFT_FEE_REVERSAL, fee, d, asOf,
                                 "SYS", liveFee == null ? "overdraft " + d : liveFee.id(), "OVERDRAFT_REVERSAL");
                         feeNet = feeNet.add(fee);
                         feeActive = false;

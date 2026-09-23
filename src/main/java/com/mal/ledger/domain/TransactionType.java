@@ -13,6 +13,7 @@ public enum TransactionType {
     SETTLEMENT(-1, false),
     REVERSAL(0, true),
     OVERDRAFT_FEE(-1, false),
+    OVERDRAFT_FEE_REVERSAL(+1, true),
     INTEREST_CAPITALIZATION(+1, false),
     INTEREST_CAPITALIZATION_REVERSAL(-1, true);
 
@@ -34,7 +35,7 @@ public enum TransactionType {
     }
 
     public boolean isOverdraftFeeRecord() {
-        return this == OVERDRAFT_FEE;
+        return this == OVERDRAFT_FEE || this == OVERDRAFT_FEE_REVERSAL;
     }
 
     public boolean isInterestRecord() {

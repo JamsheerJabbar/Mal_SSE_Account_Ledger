@@ -26,7 +26,7 @@ public final class Main {
         switch (command) {
             case "generate" -> generate(dir);
             case "list" -> list(dir);
-            case "run" -> run(dir, args.length > 2 ? args[2] : null);
+            case "run" -> run(dir, args.length > 2 && args[2] != null && !args[2].isBlank() ? args[2] : null);
             default -> {
                 System.err.println("Unknown command: " + command);
                 System.err.println("Usage: generate [dir] | run [dir] [streamId] | list [dir]");
