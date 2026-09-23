@@ -49,3 +49,15 @@ count, so an oscillating overdraft can't itself burn the budget. Wired into Ledg
 and the JSON store like every other tunable. 82/82 green, no existing stream comes close
 to the default limit. Documented in ARCHITECTURE.md as 2.12 (appended at the end rather
 than renumbering, to avoid breaking the existing section cross-references).
+Added two more known-failing tests to KnownLimitationsTest, both built on one shared
+scenario: a charge, a refund posted wrong, reversing it, then the correct refund - four
+individually legitimate steps, where the 4th is refused purely for being a 4th touch to
+the same day (maxRecalculationCycles can't tell a correction chain from a runaway
+rewrite - that's the real cost of §2.12's simplicity, not hypothetical). Second test shows
+the direct, silent consequence: capitalized interest computed from the permanently-short
+balance reads 1.80 instead of 2.22, no flag, nothing in the report to say it's short.
+Verified both number pairs (500 vs 650, 1.80 vs 2.22) by running the scenario with the
+limit raised to 4 before writing the assertions. 85 tests total now, 3 known failures, all
+in KnownLimitationsTest; `mvn test -Dtest='!KnownLimitationsTest'` still gives the other 82
+a clean BUILD SUCCESS. Restructured ARCHITECTURE.md §5 into 5.1/5.2/5.3, one per gap, and
+cross-linked from §2.12's trade-off paragraph.

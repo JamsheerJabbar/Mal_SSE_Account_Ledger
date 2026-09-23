@@ -10,7 +10,8 @@ dependencies (the JSON codec is in `com.mal.ledger.io.Json`).
 Structural decisions and their trade-offs are in [`ARCHITECTURE.md`](ARCHITECTURE.md); the
 ambiguous rules and the choice made for each are in [`AMBIGUITIES.md`](AMBIGUITIES.md);
 which of Notes.md's own acceptance criteria turned out wrong, and why, is in
-[`REJECTED.md`](REJECTED.md).
+[`REJECTED.md`](REJECTED.md); every bare numeric constant and why that value and not half
+it is in [`NUMBERS.md`](NUMBERS.md).
 
 ## Quick start
 
@@ -18,7 +19,8 @@ which of Notes.md's own acceptance criteria turned out wrong, and why, is in
 mvn compile exec:java@generate-streams                          # (re)write event-streams/*.json
 mvn compile exec:java@run-streams                                # run all five, print the day reports
 mvn compile exec:java@run-streams -Dstream=iteration-1-baseline  # run just one
-mvn test                                                          # 82 tests
+mvn test                                                          # 85 tests, 3 known failures (see below)
+mvn test -Dtest='!KnownLimitationsTest'                           # the other 82 - a clean BUILD SUCCESS
 mvn test -Dtest=Iteration2RetroCascadeTest                        # one iteration on its own
 
 mvn package -DskipTests                                          # build target/mal-account-ledger.jar
@@ -27,6 +29,41 @@ java -jar target/mal-account-ledger.jar run event-streams        # run the jar d
 
 Test output is hidden by default; add `-Dledger.redirectOutput=false` to see it, or override
 the stream directory with `-Dledger.streams.dir=...`.
+
+## Known failing tests
+
+`mvn test` ends in `BUILD FAILURE` on purpose: `KnownLimitationsTest` has three tests that
+fail, deliberately, to keep three real gaps in the design visible rather than quietly
+accepted. 82 of the 85 tests are green; run `mvn test -Dtest='!KnownLimitationsTest'` for
+a clean build when you want confirmation that nothing *else* broke.
+
+**1. A settlement is not re-checked against a balance an intervening fee has since made
+insufficient.** `REJECTED.md` R5 deliberately disabled that check - an approved hold is a
+guarantee, and re-checking the current balance at settlement time would punish the
+customer for something that happened after their approval was already confirmed. But R5's
+own "what would change my mind" asked for exactly this case: an overdraft fee lands on the
+ledger *between* approval and settlement, and the hold settles anyway - not against the
+balance it had when approved, but against one a fee has since made unable to cover it,
+immediately earning a second fee of its own. Three of the test's four checks describe that
+actual, chosen behaviour and pass; the fourth checks for the textbook-safe refusal and
+fails, because that refusal is the one thing R5 turned off.
+
+**2. A 4th, entirely legitimate correction is refused for depth alone.**
+`maxRecalculationCycles` (§2.12) exists to bound scale - it counts touches to a day, not
+whether each touch was a good idea. A charge, a refund posted for the wrong amount,
+reversing that mistake, then posting the *correct* refund is four ordinary, individually
+correct steps - and the fourth one, the fix that actually gets the amount right, is
+refused for being the 4th touch, with nothing wrong with the transaction itself.
+
+**3. Capitalized interest permanently understates what the account actually earned, as a
+direct, silent consequence of gap 2.** With the correct refund refused, day 2 stays 150
+AED short of where it should be, and every day's interest computed from it is short too -
+1.80 AED capitalized instead of the 2.22 AED the same account earns once the legitimate
+correction is allowed through (verified by re-running the identical scenario with the
+limit raised to 4). No error, no flag - the shortfall doesn't appear anywhere in the report.
+
+See `ARCHITECTURE.md` §5 and `KnownLimitationsTest`'s own doc comments for the full
+reasoning behind each.
 
 ## The five iterations
 
@@ -180,4 +217,5 @@ src/test/java/com/mal/ledger/
   WrittenAmbiguitiesTest         tests for the two ambiguities written in AMBIGUITIES.md
   RecalculationCycleLimitTest    the day-2/5/7/8 cascade, and the 4th cycle it refuses
   EventStreamEditingTest         round-trip and edit-takes-effect
+  KnownLimitationsTest           3 tests, 3 known deliberate failures - see "Known failing tests"
 ```
