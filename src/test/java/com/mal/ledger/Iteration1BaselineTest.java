@@ -42,13 +42,20 @@ class Iteration1BaselineTest {
     }
 
     @Test
-    @DisplayName("days 1-4 close at 250 / 250 / 650 / 465 with holds of 0 / 200 / 200 / 0")
+    @DisplayName("final closing settles at 250 / 225 / 625 / 415, holds of 0 / 200 / 200 / 0 at the time")
     void firstFourDays() {
+        // assertClosing reads the FINAL (end-of-window) balance for each day, not the
+        // figure that day's own report first showed. Days 2 and 4 never recover their
+        // original 250/465: the day-2 and day-4 overdraft fees raised on day 5 are
+        // permanent (see REJECTED.md R2), so they still cost 25 AED apiece here, even
+        // though E9 later reverses the debit that caused them.
         assertClosing(1, "ACC001", "250.00");
-        assertClosing(2, "ACC001", "250.00");
-        assertClosing(3, "ACC001", "650.00");
-        assertClosing(4, "ACC001", "465.00");
+        assertClosing(2, "ACC001", "225.00");
+        assertClosing(3, "ACC001", "625.00");
+        assertClosing(4, "ACC001", "415.00");
 
+        // Holds, by contrast, are read from each day's OWN report, captured at the moment
+        // it was built - unaffected by anything that happens later.
         assertEquals(0, new BigDecimal("0.00").compareTo(holds(1)));
         assertEquals(0, new BigDecimal("200.00").compareTo(holds(2)));
         assertEquals(0, new BigDecimal("200.00").compareTo(holds(3)));
@@ -64,8 +71,10 @@ class Iteration1BaselineTest {
                         result.day(5).accounts().get(0).history().get(1).assessmentBalance()),
                 "day 2 is judged on its balance before its own fee");
         assertTrue(result.day(5).restatedHistory(), "day 5 must be flagged as restating history");
-        assertEquals(0, new BigDecimal("250.00").compareTo(day2.closingBalance()),
-                "after day 6 reverses E7, day 2 is back to 250");
+        assertEquals(0, new BigDecimal("225.00").compareTo(day2.closingBalance()),
+                "day 6 reverses E7 itself, netting day 2's own ledger movement back to 250 - "
+                        + "but the -25 fee E7 caused on day 2 is never reversed, so day 2 settles "
+                        + "at 225, not the original 250");
     }
 
     @Test
@@ -101,22 +110,25 @@ class Iteration1BaselineTest {
     }
 
     @Test
-    @DisplayName("after E9 every balance and fee returns to its pre-E7 value")
-    void reversalRestoresEverything() {
-        assertEquals(0, new BigDecimal("465.00").compareTo(
+    @DisplayName("after E9 the debit's own effect is undone, but neither fee it caused reverses")
+    void reversalDoesNotUndoTheFeesItCaused() {
+        assertEquals(0, new BigDecimal("415.00").compareTo(
                         result.engine().dailyAccount("ACC001", 6).closingBalanceExcludingInterest()),
-                "day 6 closes at 465 before interest, exactly the pre-E7 day-4 figure carried forward");
-        assertEquals(0, BigDecimal.ZERO.compareTo(result.engine().netOverdraftFees("ACC001")),
-                "both fees must be reversed - with the debit gone there is nothing to charge for");
+                "465 minus the two 25 AED fees that never reverse, not the original 465");
+        assertEquals(0, new BigDecimal("-50.00").compareTo(result.engine().netOverdraftFees("ACC001")),
+                "both fees stand - E9 undoes E7's debit, not the fees E7 caused along the way");
         assertEquals(2, result.engine().transactionsFor("ACC001").stream()
-                        .filter(t -> t.type() == TransactionType.OVERDRAFT_FEE_REVERSAL).count(),
-                "reversed by new records, never by deleting the fees");
+                        .filter(t -> t.type() == TransactionType.OVERDRAFT_FEE).count(),
+                "exactly the two fees originally charged - no reversal record of any kind exists");
+        assertTrue(result.engine().transactionsFor("ACC001").stream()
+                        .noneMatch(t -> "OVERDRAFT_FEE_REVERSAL".equals(t.type().name())),
+                "the type does not exist any more - once charged, a fee is permanent history");
     }
 
     @Test
-    @DisplayName("interest capitalizes once, at 0.82 AED, from the restated accrual history")
+    @DisplayName("interest capitalizes once, at 0.76 AED, from the restated (permanently fee-reduced) history")
     void interestCapitalization() {
-        assertEquals(0, new BigDecimal("0.82").compareTo(result.engine().capitalizedInterest("ACC001")));
+        assertEquals(0, new BigDecimal("0.76").compareTo(result.engine().capitalizedInterest("ACC001")));
         assertEquals(1, result.engine().transactionsFor("ACC001").stream()
                 .filter(t -> t.type() == TransactionType.INTEREST_CAPITALIZATION).count());
         assertEquals(0, new BigDecimal("0.004").compareTo(result.engine().capitalizedInterest("ACC002")));

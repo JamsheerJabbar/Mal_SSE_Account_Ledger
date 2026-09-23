@@ -7,13 +7,18 @@ balance, the fee assessments, the auth states and the errors.
 No persistence, no database, no UI. Java 21, Maven, zero third-party production
 dependencies (the JSON codec is in `com.mal.ledger.io.Json`).
 
+Structural decisions and their trade-offs are in [`ARCHITECTURE.md`](ARCHITECTURE.md); the
+ambiguous rules and the choice made for each are in [`AMBIGUITIES.md`](AMBIGUITIES.md);
+which of Notes.md's own acceptance criteria turned out wrong, and why, is in
+[`REJECTED.md`](REJECTED.md).
+
 ## Quick start
 
 ```bash
 mvn compile exec:java@generate-streams                          # (re)write event-streams/*.json
 mvn compile exec:java@run-streams                                # run all five, print the day reports
 mvn compile exec:java@run-streams -Dstream=iteration-1-baseline  # run just one
-mvn test                                                          # 75 tests
+mvn test                                                          # 80 tests
 mvn test -Dtest=Iteration2RetroCascadeTest                        # one iteration on its own
 
 mvn package -DskipTests                                          # build target/mal-account-ledger.jar
@@ -31,10 +36,10 @@ accounts, its own config, its own instructions and its own expectations. Nothing
 | File | What it pins down |
 |---|---|
 | `iteration-1-baseline.json` | The stream written out in Notes.md, verbatim, with the day-by-day figures it states. |
-| `iteration-2-retro-cascade.json` | An 8-day window: a 2000 AED debit back-dated into day 3 arrives on **day 7**, after interest was already credited. Four fees raised, interest reversed and re-credited, then day 8 unwinds it all. |
+| `iteration-2-retro-cascade.json` | An 8-day window: a 2000 AED debit back-dated into day 3 arrives on **day 7**, after interest was already credited. Four fees raised, interest reversed and re-credited; day 8 reverses the debit itself, but not the four fees it caused. |
 | `iteration-3-auth-holds.json` | Auth and hold lifecycle in isolation — approvals at positive and at exactly zero headroom, and every settlement rejection path. |
 | `iteration-4-precision.json` | Two currencies at two precisions, installment remainders, and balances small enough that the daily accrual rounds to zero every day. |
-| `iteration-5-mixed-stress.json` | AED and BHD side by side, a hold live across a restatement, one fee reversed and one that stands. |
+| `iteration-5-mixed-stress.json` | AED and BHD side by side, a hold live across a restatement, and a permanent fee that costs a later hold its approval. |
 
 ## Editing a stream
 
@@ -69,7 +74,10 @@ the `filesMatchTheGenerator` check.
 Two structures do the work:
 
 - **The journal** is append-only. Nothing is updated or deleted; a correction is a new
-  `REVERSAL` / `*_REVERSAL` record referencing the record it undoes.
+  `REVERSAL` / `*_REVERSAL` record referencing the record it undoes — with one deliberate
+  exception: an overdraft fee is never corrected at all. Once charged it is permanent
+  history, even if the transaction that caused it is later reversed (see
+  [`REJECTED.md`](REJECTED.md) R2).
 - **Daily accounts are a derived projection**, rebuilt from the journal on every
   reconciliation. They can never drift, and `AllEventStreamsTest` asserts they reconcile
   to the journal sum for every stream.
@@ -79,9 +87,19 @@ reconcile the interest credit, repeat until a pass appends nothing. That is the 
 loops of calculation over a reversal on the 7th or 8th day" the notes warn about, made
 explicit — the pass count is printed per day and asserted in iteration 2.
 
-The loop terminates because **a day is judged on its balance before its own fee**. Applying
-a fee can never flip a day back to solvent, so a single forward walk settles the week.
-Earlier days' fees *do* count, which is why day 4 in the baseline closes at −180 and not −155.
+The loop terminates because **overdraft assessment is strictly monotone**: a fee, once
+charged, is never removed, so a pass can only ever add fee records against a finite number
+of days — it cannot oscillate. It repeats beyond a single pass only because interest
+capitalization is itself ledger movement on the capitalization day, which can tip that one
+day negative and trigger its own fee.
+
+Holds follow the same "no correction, no history" spirit: `Auth.isActive()` is a pure
+approval-status check with no date of any kind attached. A hold counts from the moment it
+is approved until it settles or is rejected — nothing else. Because daily accounts are
+fully rebuilt on every reconciliation, this means a day's *displayed* holds reflect
+whichever holds are currently approved as of the report being read, not what was actually
+true on that day historically (`ARCHITECTURE.md` §2.6) — closing balances and interest are
+unaffected either way, since holds only ever subtract from available balance.
 
 ## Resolved ambiguities
 
@@ -90,12 +108,14 @@ runs the baseline **both ways** so the cost of each reading is visible.
 
 | Flag | Chosen | Why | Other reading gives |
 |---|---|---|---|
-| `accrualRounding` | `DOWN` | Notes.md requires day 4 (465.00 × 0.0004 = 0.186) to accrue **0.18**. Also never credits interest the balance has not earned. | `HALF_UP` → 0.84 total, not 0.82 |
-| `discardAccrualRemainder` | `false` | The capitalized total is exactly the sum of the stored daily accruals, so the credit always reconciles to its own audit trail. | `true` → 0.83, which the trail no longer explains |
-| `capitalizationExcludesOwnDay` | `true` | The credit lands on day 6, so including day 6's own accrual is circular. Confirmed by the notes: ACC001 totals 0.82 (days 1–5), ACC002 totals 0.004 (day 5 only). | `false` → 1.00 and 0.008, contradicting both stated figures |
-| `overdraftAssessmentExcludesOwnDayFee` | `true` | "Day 2 … before any fee assessed = −370". Makes assessment idempotent and self-correcting. | `false` → a day at +10 under a −25 fee stays "overdrawn" forever |
-| `overdraftFeeOnDaysWithoutMovement` | `false` | **Notes.md contradicts itself here** — see below. | `true` → day 5 closes at −230 and three fees are raised |
+| `accrualRounding` | `DOWN` | Notes.md requires day 4 (465.00 × 0.0004 = 0.186) to accrue **0.18**. Also never credits interest the balance has not earned. | `HALF_UP` → 0.78 total, not 0.76 |
+| `discardAccrualRemainder` | `false` | The capitalized total is exactly the sum of the stored daily accruals, so the credit always reconciles to its own audit trail. | `true` → 0.77, which the trail no longer explains |
+| `capitalizationExcludesOwnDay` | `true` | The credit lands on day 6, so including day 6's own accrual is circular. Confirmed by the notes: ACC001 totals 0.76 (days 1–5, net of the permanent day-2/day-4 fees), ACC002 totals 0.004 (day 5 only). | `false` → 0.92 and 0.008, contradicting both stated figures |
+| `overdraftAssessmentExcludesOwnDayFee` | `true` | "Day 2 … before any fee assessed = −370". Now that fees are permanent (see below), this only changes what a day's `assessmentBalance` *displays* once it already carries a fee — it no longer changes any outcome, since nothing reverses a fee either way. | `false` → the same closing balances; only the displayed assessment basis for an already-fee-bearing day differs |
+| `overdraftFeeOnDaysWithoutMovement` | `false` | **Notes.md contradicts itself here** — see below. | `true` → day 5 closes at −230 and three fees are raised, permanently 25 AED apart from the `false` reading (fees no longer converge back to the same end state either way) |
 | `installmentRounding` | `DOWN` | Every slice must be ≤ total/n; the remainder is posted as a `BALANCING_ADJUSTMENT` tagged `BUFFER_PAY`. | `HALF_UP` → 1.000 BHD / 7 would post 0.143 × 7 = 1.001, over the total |
+| overdraft fees reversible? | **No, permanent** | Once charged, a fee stands even if the transaction that caused it is later reversed — transactions are immutable, and a fee is a fact about the ledger as it stood, not a projection that tracks later corrections. See `REJECTED.md` R2. | Reversible fees keep the restated ledger internally consistent with its own current history, at the cost of a second record type and a non-monotone assessment rule |
+| holds carry a date constraint? | **No** | A hold counts purely on being approved — no value-date window, no lingering-until-settlement window for a settled hold. | Bounding a hold by its own value date (or a settled hold's settlement date) keeps a day's displayed history faithful to what was actually true that day, at the cost of two more date comparisons |
 
 ### The one contradiction in Notes.md
 
@@ -105,8 +125,10 @@ and day4" — two fees. Both cannot hold: a day-5 fee would make day 5 close at 
 
 We follow the figures (a day with no ledger movement of its own is not separately assessed;
 it carries the prior balance forward) and ship the other reading behind
-`overdraftFeeOnDaysWithoutMovement: true`, tested in `AmbiguityChoicesTest`. Either way the
-day-6 reversal restores the same end state — the readings differ only mid-week.
+`overdraftFeeOnDaysWithoutMovement: true`, tested in `AmbiguityChoicesTest`. With fees now
+permanent, the two readings no longer converge to the same end state either: the extra
+day-5 fee under the `true` reading is a real, lasting 25 AED the `false` reading never
+charges.
 
 ## Notes.md acceptance criteria — the verdicts
 
@@ -118,7 +140,7 @@ day-6 reversal restores the same end state — the readings differ only mid-week
 | The day-4 settlement of authA should be accepted | **Right** | The ledger stood at 650 (≥ 185) when it arrived and 185 is within the 200 hold. The back-dated debit that later drags day 4 negative had not been instructed yet and cannot retroactively refuse it. |
 | A settlement quoting an unknown auth id must be refused | **Right** | Accepting it would let a settlement instruction alone move money with no prior authorization. Refused, recorded, no funds move. Sibling cases — rejected auth, already-settled auth, settlement over the hold — are in iteration 3. |
 | Holds reduce available balance but not ledger balance | **Right as a rule, moot in the baseline** | The rule holds (iteration 3 proves it on an approved hold), but authB never becomes a hold: available balance was −205 when authorization was requested. |
-| After E9 all balances and fees return to pre-E7 values | **Right** | Day 6 closes at 465.00 before interest — exactly where day 4 stood before E7 — and both fees reverse, because with the debit gone there is nothing to charge for. E8's refusal is *not* undone: it was correct on the information available that day. |
+| After E9 all balances and fees return to pre-E7 values | **Wrong** | Transactions are immutable: E9 reverses E7 itself, but does not get to erase the fees E7 caused along the way. Day 6 closes at 415.00, not the pre-E7 465.00 — the two fees stand permanently (see `REJECTED.md` R2). E8's refusal is *not* undone either: it was correct on the information available that day. |
 | The three BHD installments should be 3.334 | **Wrong** | 3.334 × 3 = 10.002, more than was instructed. Slices round down to 3.333; the 0.001 remainder is posted as a `BUFFER_PAY` balancing entry. (The notes' own "0.333" is a typo for 3.333 — 10/3 is 3.333, not 0.333.) |
 | If rounded daily accruals do not sum to the capitalized total, discard the remainder | **Wrong** | The capitalized total is the rounded sum of the stored daily accruals. Nothing is discarded, so the credit always reconciles to the accrual history it came from. |
 
@@ -126,6 +148,10 @@ day-6 reversal restores the same end state — the readings differ only mid-week
 
 ```
 pom.xml                            Maven build
+Notes.md                           the problem statement (source of truth for the rules)
+ARCHITECTURE.md                    structural decisions and their trade-offs
+AMBIGUITIES.md                     every ambiguous rule, in prose, and the choice made
+REJECTED.md                        Notes.md's own acceptance criteria, verified one by one
 event-streams/                     the five iterations, editable JSON
 src/main/java/com/mal/ledger/
   domain/       Account, Transaction, Auth, DailyAccount, Currency, Money
@@ -135,9 +161,10 @@ src/main/java/com/mal/ledger/
   report/       DayReport, ReportPrinter
   runner/       StreamRunner (walks a stream day by day), Main (CLI)
 src/test/java/com/mal/ledger/
-  Iteration1..5*Test            one class per iteration, independently runnable
-  AllEventStreamsTest           parameterized over every file in event-streams/
-  AcceptanceCriteriaTest        the Notes.md verdicts above
-  AmbiguityChoicesTest          each choice run both ways
-  EventStreamEditingTest        round-trip and edit-takes-effect
+  Iteration1..5*Test             one class per iteration, independently runnable
+  AllEventStreamsTest            parameterized over every file in event-streams/
+  AcceptanceCriteriaTest         the Notes.md verdicts above
+  AmbiguityChoicesTest           each choice run both ways
+  WrittenAmbiguitiesTest         tests for the two ambiguities written in AMBIGUITIES.md
+  EventStreamEditingTest         round-trip and edit-takes-effect
 ```

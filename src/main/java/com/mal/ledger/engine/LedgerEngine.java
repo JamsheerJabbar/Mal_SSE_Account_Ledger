@@ -157,12 +157,16 @@ public final class LedgerEngine {
         return sum;
     }
 
-    /** Sum of approved-and-unsettled holds in force on the given date. */
-    public BigDecimal activeHoldsOn(String accountId, LocalDate date) {
+    /**
+     * Sum of currently approved-and-unsettled holds. No date constraint: a hold counts
+     * from the moment it is approved and stops counting the moment it settles or is
+     * rejected - it does not matter which day is being looked at.
+     */
+    public BigDecimal activeHolds(String accountId) {
         Account account = accounts.get(accountId);
         BigDecimal sum = Money.zero(account.currency());
         for (Auth auth : auths.values()) {
-            if (auth.accountId().equals(accountId) && auth.isActiveOn(date)) {
+            if (auth.accountId().equals(accountId) && auth.isActive()) {
                 sum = sum.add(auth.holdAmount());
             }
         }
@@ -171,7 +175,7 @@ public final class LedgerEngine {
 
     /** Holds reduce available balance, never the ledger balance. */
     public BigDecimal availableBalanceAsOf(String accountId, LocalDate date) {
-        return ledgerBalanceAsOf(accountId, date).subtract(activeHoldsOn(accountId, date));
+        return ledgerBalanceAsOf(accountId, date).subtract(activeHolds(accountId));
     }
 
     private List<Transaction> transactionsOn(String accountId, LocalDate date) {
@@ -405,6 +409,11 @@ public final class LedgerEngine {
      * applying a fee can never flip the day back to solvent - so a single forward walk
      * settles the whole week and the cascade terminates.
      *
+     * <p>Once a day has been charged, the fee is never reversed, even if a later
+     * back-dated correction recomputes that day back to solvent. Transactions are
+     * append-only: a correction undoes the record it targets, not every fee that record
+     * happened to cause along the way. The fee stands as its own independent history.
+     *
      * <p>Days with no ledger movement of their own are not separately assessed; they carry
      * the previous day's balance forward. See {@code overdraftFeeOnDaysWithoutMovement}.
      *
@@ -422,11 +431,9 @@ public final class LedgerEngine {
                 BigDecimal nonFee = Money.zero(currency);
                 BigDecimal feeNet = Money.zero(currency);
                 boolean hasMovement = false;
-                Transaction liveFee = null;
                 for (Transaction t : txns) {
                     if (t.type().isOverdraftFeeRecord()) {
                         feeNet = feeNet.add(t.signedAmount());
-                        if (t.type() == TransactionType.OVERDRAFT_FEE) liveFee = t;
                     } else {
                         nonFee = nonFee.add(t.signedAmount());
                         hasMovement = true;
@@ -441,21 +448,13 @@ public final class LedgerEngine {
                 boolean assessable = !d.isAfter(assessThrough)
                         && (hasMovement || config.overdraftFeeOnDaysWithoutMovement());
 
-                if (assessable) {
+                if (assessable && assessmentBalance.signum() < 0 && !feeActive) {
                     BigDecimal fee = account.overdraftFee();
-                    if (assessmentBalance.signum() < 0 && !feeActive) {
-                        append(account.id(), TransactionType.OVERDRAFT_FEE, fee.negate(), d, asOf,
-                                "SYS", "overdraft " + d, "OVERDRAFT");
-                        feeNet = feeNet.subtract(fee);
-                        feeActive = true;
-                        changed = true;
-                    } else if (assessmentBalance.signum() >= 0 && feeActive) {
-                        append(account.id(), TransactionType.OVERDRAFT_FEE_REVERSAL, fee, d, asOf,
-                                "SYS", liveFee == null ? "overdraft " + d : liveFee.id(), "OVERDRAFT_REVERSAL");
-                        feeNet = feeNet.add(fee);
-                        feeActive = false;
-                        changed = true;
-                    }
+                    append(account.id(), TransactionType.OVERDRAFT_FEE, fee.negate(), d, asOf,
+                            "SYS", "overdraft " + d, "OVERDRAFT");
+                    feeNet = feeNet.subtract(fee);
+                    feeActive = true;
+                    changed = true;
                 }
 
                 BigDecimal closing = preFee.add(feeNet);
@@ -474,7 +473,7 @@ public final class LedgerEngine {
                 daily.setOverdraftEnabled(feeActive);
                 daily.setInterestAccrual(accrual);
                 daily.setRawInterestAccrual(rawAccrual.setScale(12, RoundingMode.HALF_UP));
-                BigDecimal holds = activeHoldsOn(account.id(), d);
+                BigDecimal holds = activeHolds(account.id());
                 daily.setActiveHoldsTotal(holds);
                 daily.setAvailableBalance(closing.subtract(holds));
                 daily.replaceTransactions(transactionsOn(account.id(), d));

@@ -189,15 +189,15 @@
           {
             "day": 1,
             "closing": "500.00",
-            "holds": "200.00",
-            "available": "300.00",
+            "holds": "300.00",
+            "available": "200.00",
             "accrual": "0.20"
           },
           {
             "day": 2,
             "closing": "500.00",
-            "holds": "500.00",
-            "available": "0.00",
+            "holds": "300.00",
+            "available": "200.00",
             "accrual": "0.20"
           },
           {

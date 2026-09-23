@@ -54,12 +54,13 @@ Interest accrued = 0.004, total interest = 0.004
 Acceptance and Rejections:
 Some criterias are wrong, record which and why?
 Day 2 closing ledger balance calculated at end of day5 before any fee assessed = -370aed - exactly one overdraft fee to be assessed , i.e on Day 2 - false, carries on to day4 and day 5
-Day 4 settlement of AuthA should be accepted - true because current ledger balance >= 185 and settlement amount <= auth amount
+Day 4 settlement of AuthA should be accepted - true because auth was approved, so irrespective of balance it should be released
 Any settlement with AuthId not present in ledger should be rejected and funds must not leave accounts - should be accepted due to security concern. (need to think of edge cases)
 If authB is approved - holds reduce available balance but not ledger balance - actually true because hold approval date will be the value date, which is on or after day 6, but here approval is denied due to less insufficient available balance during auth call.
-After E9, all balances and fees return to pre E7 values = true because no other approved transaction happens at E8, also all the overdraft fee should be reversed since accounts get recalculated and theres no point for overdraft fee.
+After E9, all balances and fees return to pre E7 values = false, because transactions are immutable, non deletable, so whichever only reversed will be affected, and subsequent interest calculated, but overdraft will remain as is
 The three BHD installments should be 3.334 = false, it should be 0.333, always <= total, and remainder should be added as an overhead on ledger accounts
 If rounded daily accruals do not sum to capitalized total, remainder is discarded - should not be discarded, should be rounded off while calculating capitalized total.
+Rejected ledger balance constraint, since approved auth should always execute
 
 
 Entities:

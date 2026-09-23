@@ -10,3 +10,31 @@
 OVERDRAFT_FEE_REVERSAL had been dropped from TransactionType and the LedgerEngine call site,
 and Auth.isActiveOn(date) had been reverted to a date-blind isActive() that showed holds as
 active on every day, not just from their value date. Restored both, 75/75 tests green.
+5:30pm, wrote ARCHITECTURE.md - the structural decisions and what each one costs: append-only
+journal with daily accounts rebuilt as a derived projection, reverse-and-recredit for restated
+interest, the fixed-point reconciliation loop (and why it terminates), intra-day vs end-of-day
+reconciliation, auths kept as state outside the journal, errors recorded as data, BigDecimal with
+precision carried by the currency, every ambiguity as a LedgerConfig flag, JSON streams as the
+source of truth, zero production dependencies.
+Working tree currently does not compile again - TransactionType has dropped
+OVERDRAFT_FEE_REVERSAL and Auth is back to a date-blind isActive(), but LedgerEngine and
+StreamRunner still reference the old names. This is the "overdraft fees are permanent" direction
+from the updated Notes.md; left as-is and written up as the open decision in ARCHITECTURE.md
+section 4, with the remaining engine/test changes listed.
+Confirmed both calls explicitly: fees permanent, holds fully date-blind (no value-date
+window, no lingering-until-settlement window - confirmed even the "shows current auth
+state on a historical day's row" consequence is intended, not a bug). Landed the engine
+side (LedgerEngine, Auth, TransactionType, StreamRunner), found and fixed a real bug along
+the way (closingExInterest was checking live end-of-run state instead of the day's own
+point-in-time figure - AccountDayView.LedgerRow now carries it directly), then rewrote
+every affected expectation by hand: EventStreamFactory (iterations 1, 2, 3, 5; 4 untouched,
+no auths/no fee ever reverses there), regenerated the JSON, and rewrote
+AcceptanceCriteriaTest (After-E9 flips from Right to Wrong), AmbiguityChoicesTest (two of
+the six ambiguities changed premise entirely - assessment-order no longer self-corrects
+anything, and the quiet-day reading no longer converges to the same end state), and the
+iteration 1/2/5 test classes. Biggest surprise: iteration 5's authC flips from APPROVED to
+REJECTED - the permanent day-1 fee eats 25 AED out of the day-5 running balance, so a hold
+that used to clear at exactly zero headroom no longer does. 80/80 green. Updated
+ARCHITECTURE.md section 4 to "resolved" (folded into 2.2 and 2.6), REJECTED.md R2,
+AMBIGUITIES.md (the before/after-own-fee entry is now moot; added the holds one), and
+README's tables and numbers.

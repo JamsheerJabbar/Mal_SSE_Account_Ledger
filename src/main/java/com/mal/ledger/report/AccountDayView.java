@@ -28,6 +28,7 @@ public record AccountDayView(
             BigDecimal opening,
             BigDecimal assessmentBalance,
             BigDecimal closing,
+            BigDecimal closingExcludingInterest,
             BigDecimal holds,
             BigDecimal available,
             BigDecimal accrual,

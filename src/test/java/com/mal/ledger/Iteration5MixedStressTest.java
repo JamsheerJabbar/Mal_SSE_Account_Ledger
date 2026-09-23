@@ -18,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Iteration 5 - two currencies side by side, a hold live across a restatement, one fee
- * reversed and one that stands.
+ * Iteration 5 - two currencies side by side, a hold live across a restatement, and a
+ * permanent fee that outlives the debit that caused it - costing a later hold its approval.
  *
  * <p>Independently executable: {@code gradle test --tests '*Iteration5MixedStressTest'}.
  */
@@ -42,10 +42,10 @@ class Iteration5MixedStressTest {
     @Test
     @DisplayName("the two accounts are assessed independently, each in its own currency")
     void accountsAreIndependent() {
-        assertEquals(0, new BigDecimal("0.00").compareTo(result.engine().netOverdraftFees("ACC001")),
-                "the AED fee was reversed with its cause");
+        assertEquals(0, new BigDecimal("-25.00").compareTo(result.engine().netOverdraftFees("ACC001")),
+                "the AED fee stands even though its cause (the day-1 debit) was reversed");
         assertEquals(0, new BigDecimal("-2.500").compareTo(result.engine().netOverdraftFees("ACC002")),
-                "the BHD fee stands - day 2 is still overdrawn on its own merits");
+                "the BHD fee stands too - day 2 is still overdrawn on its own merits");
         assertEquals(1, result.engine().overdraftFeeRecordCount("ACC001"));
         assertEquals(1, result.engine().overdraftFeeRecordCount("ACC002"));
     }
@@ -73,7 +73,8 @@ class Iteration5MixedStressTest {
                 "the hold stacks on top of the overdrawn ledger");
 
         var day4 = result.day(4).accounts().get(0);
-        assertEquals(0, new BigDecimal("500.00").compareTo(day4.closingBalance()));
+        assertEquals(0, new BigDecimal("475.00").compareTo(day4.closingBalance()),
+                "800 - 300 settlement - the permanent day-1 fee (25) that E7 does not undo");
         assertEquals(0, BigDecimal.ZERO.compareTo(day4.activeHolds()), "authA settled on day 4");
     }
 
@@ -104,7 +105,21 @@ class Iteration5MixedStressTest {
     @Test
     @DisplayName("each account capitalizes its own interest, in its own precision")
     void interestPerAccount() {
-        assertEquals(0, new BigDecimal("1.36").compareTo(result.engine().capitalizedInterest("ACC001")));
+        assertEquals(0, new BigDecimal("1.31").compareTo(result.engine().capitalizedInterest("ACC001")));
         assertEquals(0, new BigDecimal("0.035").compareTo(result.engine().capitalizedInterest("ACC002")));
+    }
+
+    @Test
+    @DisplayName("a permanent fee can cost a later hold: authC is refused, not approved")
+    void permanentFeeCostsALaterHold() {
+        // Day 1's fee never reverses, so by day 5 the running balance is 475, not the
+        // clean 500 a fully-reversed fee would have left. authC's 500 AED hold request,
+        // which would have cleared at exactly zero headroom against 500, is refused
+        // against 475 instead.
+        assertEquals(AuthStatus.REJECTED, result.engine().auths().get("authC").status());
+        assertTrue(result.errors().stream().anyMatch(e ->
+                e.eventLabel().equals("E11") && e.code() == ErrorCode.INSUFFICIENT_AVAILABLE_BALANCE));
+        assertEquals(0, new BigDecimal("475.00").compareTo(
+                result.day(5).accounts().get(0).availableBalance()));
     }
 }

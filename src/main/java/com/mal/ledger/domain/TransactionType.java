@@ -12,8 +12,8 @@ public enum TransactionType {
     BALANCING_ADJUSTMENT(+1, false),
     SETTLEMENT(-1, false),
     REVERSAL(0, true),
+    /** Once assessed, an overdraft fee is never reversed - it stands as its own valid history. */
     OVERDRAFT_FEE(-1, false),
-    OVERDRAFT_FEE_REVERSAL(+1, true),
     INTEREST_CAPITALIZATION(+1, false),
     INTEREST_CAPITALIZATION_REVERSAL(-1, true);
 
@@ -35,7 +35,7 @@ public enum TransactionType {
     }
 
     public boolean isOverdraftFeeRecord() {
-        return this == OVERDRAFT_FEE || this == OVERDRAFT_FEE_REVERSAL;
+        return this == OVERDRAFT_FEE;
     }
 
     public boolean isInterestRecord() {

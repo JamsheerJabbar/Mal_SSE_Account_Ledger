@@ -102,17 +102,21 @@ class AcceptanceCriteriaTest {
     }
 
     @Test
-    @DisplayName("RIGHT - 'after E9 all balances and fees return to pre-E7 values'")
-    void reversalRestoresPreE7State() {
-        assertEquals(0, new BigDecimal("465.00").compareTo(
+    @DisplayName("WRONG - 'after E9 all balances and fees return to pre-E7 values' (see REJECTED.md R2)")
+    void reversalDoesNotRestorePreE7State() {
+        // Transactions are append-only and immutable: E9 reverses E7 itself, but it does
+        // not get to also erase every fee E7 happened to cause along the way. Those fees
+        // were legitimate history when the ledger actually stood that way, and stand
+        // permanently - so day 6 settles 50 AED (two fees) below the pre-E7 465.00.
+        assertEquals(0, new BigDecimal("415.00").compareTo(
                         result.engine().dailyAccount("ACC001", 6).closingBalanceExcludingInterest()),
-                "465.00 is exactly where day 4 stood before E7 arrived");
-        assertEquals(0, BigDecimal.ZERO.compareTo(result.engine().netOverdraftFees("ACC001")),
-                "with the debit gone there is nothing to charge for, so both fees reverse");
-        assertEquals(0, new BigDecimal("0.82").compareTo(result.engine().capitalizedInterest("ACC001")),
-                "the accrual history is restated too, and capitalizes at the pre-E7 total");
+                "415.00, not the pre-E7 465.00 - the day-2 and day-4 fees still stand");
+        assertEquals(0, new BigDecimal("-50.00").compareTo(result.engine().netOverdraftFees("ACC001")),
+                "both fees remain charged; E9 undoes the debit, not the fees it caused");
+        assertEquals(0, new BigDecimal("0.76").compareTo(result.engine().capitalizedInterest("ACC001")),
+                "the accrual history is restated from the permanently-lower balances, not the pre-E7 ones");
         assertEquals(AuthStatus.REJECTED, result.engine().auths().get("authB").status(),
-                "E8's refusal is not undone: it was correct on the information available that day");
+                "E8's refusal is not undone either: it was correct on the information available that day");
     }
 
     @Test
@@ -144,7 +148,7 @@ class AcceptanceCriteriaTest {
         for (int day = 1; day <= 5; day++) {
             sumOfDailies = sumOfDailies.add(result.engine().dailyAccount("ACC001", day).interestAccrual());
         }
-        assertEquals(0, new BigDecimal("0.82").compareTo(sumOfDailies));
+        assertEquals(0, new BigDecimal("0.76").compareTo(sumOfDailies));
         assertEquals(0, sumOfDailies.compareTo(result.engine().capitalizedInterest("ACC001")),
                 "the capitalized credit must equal the accrual history it came from");
     }

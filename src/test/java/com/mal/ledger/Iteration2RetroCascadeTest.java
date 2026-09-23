@@ -73,15 +73,15 @@ class Iteration2RetroCascadeTest {
     }
 
     @Test
-    @DisplayName("day 8 unwinds the whole chain back to the pre-debit position")
-    void dayEightRestoresEverything() {
-        assertEquals(0, new BigDecimal("901.92").compareTo(
+    @DisplayName("day 8 undoes the debit itself, but not the four permanent fees it caused")
+    void dayEightSettlesShortOfThePreDebitPosition() {
+        assertEquals(0, new BigDecimal("801.86").compareTo(
                         result.day(8).accounts().get(0).closingBalance()),
-                "identical to the day-6 closing balance before the debit arrived");
-        assertEquals(0, BigDecimal.ZERO.compareTo(result.engine().netOverdraftFees("ACC001")),
-                "all four fees reversed");
-        assertEquals(0, new BigDecimal("1.92").compareTo(result.engine().capitalizedInterest("ACC001")),
-                "interest restated back up to its original total");
+                "100 AED (four fees) below the day-6 closing balance, not identical to it");
+        assertEquals(0, new BigDecimal("-100.00").compareTo(result.engine().netOverdraftFees("ACC001")),
+                "none of the four fees reverse - they are permanent history (REJECTED.md R2)");
+        assertEquals(0, new BigDecimal("1.86").compareTo(result.engine().capitalizedInterest("ACC001")),
+                "interest restates from the permanently-lower balances, not back to 1.92");
     }
 
     @Test
@@ -95,13 +95,15 @@ class Iteration2RetroCascadeTest {
     }
 
     @Test
-    @DisplayName("nothing is ever rewritten: 20 records, all corrections appended")
+    @DisplayName("nothing is ever rewritten: 20 records, every correction appended, no fee ever reversed")
     void appendOnly() {
-        assertEquals(20, result.engine().journal().size());
+        assertEquals(16, result.engine().journal().size(),
+                "4 fewer than under fee-reversal: no OVERDRAFT_FEE_REVERSAL records are ever created");
         assertEquals(4, result.engine().transactionsFor("ACC001").stream()
                 .filter(t -> t.type() == TransactionType.OVERDRAFT_FEE).count());
-        assertEquals(4, result.engine().transactionsFor("ACC001").stream()
-                .filter(t -> t.type() == TransactionType.OVERDRAFT_FEE_REVERSAL).count());
+        assertTrue(result.engine().transactionsFor("ACC001").stream()
+                        .noneMatch(t -> "OVERDRAFT_FEE_REVERSAL".equals(t.type().name())),
+                "the type does not exist any more - a fee, once charged, is never undone");
         assertEquals(0, result.errors().size());
     }
 }

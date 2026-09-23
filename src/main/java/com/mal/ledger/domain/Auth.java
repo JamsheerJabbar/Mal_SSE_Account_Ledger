@@ -45,18 +45,13 @@ public final class Auth {
     }
 
     /**
-     * A hold reduces the available balance from its value date until it settles.
-     * It never touches the ledger balance.
+     * A hold reduces the available balance while it is approved and unsettled. It never
+     * touches the ledger balance. No date constraint: an approved hold counts from the
+     * moment it is approved, and stops counting the moment it settles or is rejected -
+     * its own status is the only thing that matters.
      */
-    public boolean isActiveOn(LocalDate date) {
-        if (status == AuthStatus.APPROVED && !holdValueDate.isAfter(date)) {
-            return true;
-        }
-        // Settled holds still suppress availability up to (not including) the settlement date,
-        // after which the real debit takes over.
-        return status == AuthStatus.SETTLED
-                && !holdValueDate.isAfter(date)
-                && settledOn != null && settledOn.isAfter(date);
+    public boolean isActive() {
+        return status == AuthStatus.APPROVED;
     }
 
     @Override

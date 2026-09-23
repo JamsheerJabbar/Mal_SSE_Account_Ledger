@@ -1,7 +1,7 @@
 {
   "id": "iteration-5-mixed-stress",
-  "name": "Both currencies, both fee directions, holds spanning a restatement",
-  "description": "AED and BHD side by side. One account takes a back-dated debit that raises a fee and then reverses it while a hold is live across the restatement; the other keeps a fee on a day that never recovers. Ends with an installment split that divides exactly, so no buffer pay is raised.",
+  "name": "Both currencies, both fee directions, a permanent fee that costs a later hold",
+  "description": "AED and BHD side by side. One account takes a back-dated debit that raises a fee, then reverses the debit itself - but not the fee, which is permanent, and whose 25 AED is still missing three days later when a hold that would otherwise have cleared is refused instead; a live hold spans the restatement throughout. The other account keeps a fee on a day that never recovers. Ends with an installment split that divides exactly, so no buffer pay is raised.",
   "config": {
     "weekStartDate": "2026-01-01",
     "windowDays": 6,
@@ -91,7 +91,7 @@
       "account": "ACC001",
       "type": "REVERSAL",
       "target": "E5",
-      "note": "unwinds the back-dated debit and its fee"
+      "note": "unwinds the back-dated debit itself, but not the fee it caused"
     },
     {
       "label": "E8",
@@ -121,7 +121,7 @@
       "type": "AUTH",
       "amount": "600",
       "authId": "authB",
-      "note": "refused: only 500 available"
+      "note": "refused: only 475 available"
     },
     {
       "label": "E11",
@@ -131,7 +131,7 @@
       "type": "AUTH",
       "amount": "500",
       "authId": "authC",
-      "note": "approved at exactly zero headroom, never settled"
+      "note": "refused: day 1's fee is permanent, so only 475 is available, not 500"
     },
     {
       "label": "E12",
@@ -182,8 +182,8 @@
             "day": 1,
             "assessmentBalance": "-100.00",
             "closing": "-125.00",
-            "holds": "0.00",
-            "available": "-125.00",
+            "holds": "300.00",
+            "available": "-425.00",
             "accrual": "0.00",
             "overdraft": true
           },
@@ -229,37 +229,37 @@
           {
             "day": 1,
             "assessmentBalance": "800.00",
-            "closing": "800.00",
+            "closing": "775.00",
             "holds": "0.00",
-            "available": "800.00",
-            "accrual": "0.32",
-            "overdraft": false
+            "available": "775.00",
+            "accrual": "0.31",
+            "overdraft": true
           },
           {
             "day": 2,
-            "assessmentBalance": "800.00",
-            "closing": "800.00",
-            "holds": "300.00",
-            "available": "500.00",
-            "accrual": "0.32",
+            "assessmentBalance": "775.00",
+            "closing": "775.00",
+            "holds": "0.00",
+            "available": "775.00",
+            "accrual": "0.31",
             "overdraft": false
           },
           {
             "day": 3,
-            "assessmentBalance": "800.00",
-            "closing": "800.00",
-            "holds": "300.00",
-            "available": "500.00",
-            "accrual": "0.32",
+            "assessmentBalance": "775.00",
+            "closing": "775.00",
+            "holds": "0.00",
+            "available": "775.00",
+            "accrual": "0.31",
             "overdraft": false
           },
           {
             "day": 4,
-            "assessmentBalance": "500.00",
-            "closing": "500.00",
+            "assessmentBalance": "475.00",
+            "closing": "475.00",
             "holds": "0.00",
-            "available": "500.00",
-            "accrual": "0.20",
+            "available": "475.00",
+            "accrual": "0.19",
             "overdraft": false
           }
         ]
@@ -270,10 +270,10 @@
         "rows": [
           {
             "day": 5,
-            "closing": "500.00",
-            "holds": "500.00",
-            "available": "0.00",
-            "accrual": "0.20"
+            "closing": "475.00",
+            "holds": "0.00",
+            "available": "475.00",
+            "accrual": "0.19"
           }
         ]
       },
@@ -283,11 +283,11 @@
         "rows": [
           {
             "day": 6,
-            "closing": "501.36",
-            "closingExInterest": "500.00",
-            "holds": "500.00",
-            "available": "1.36",
-            "accrual": "0.20"
+            "closing": "476.31",
+            "closingExInterest": "475.00",
+            "holds": "0.00",
+            "available": "476.31",
+            "accrual": "0.19"
           }
         ]
       },
@@ -307,16 +307,16 @@
       }
     ],
     "finalInterest": {
-      "ACC001": "1.36",
+      "ACC001": "1.31",
       "ACC002": "0.035"
     },
     "authStatus": {
       "authA": "SETTLED",
       "authB": "REJECTED",
-      "authC": "APPROVED"
+      "authC": "REJECTED"
     },
     "netOverdraftFees": {
-      "ACC001": "0.00",
+      "ACC001": "-25.00",
       "ACC002": "-2.500"
     },
     "overdraftFeeRecordCount": {
@@ -330,6 +330,10 @@
       },
       {
         "event": "E10",
+        "code": "INSUFFICIENT_AVAILABLE_BALANCE"
+      },
+      {
+        "event": "E11",
         "code": "INSUFFICIENT_AVAILABLE_BALANCE"
       }
     ],

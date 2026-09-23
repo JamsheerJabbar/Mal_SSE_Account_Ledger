@@ -1,7 +1,7 @@
 {
   "id": "iteration-2-retro-cascade",
-  "name": "Day-7 reversal cascade - interest reversed and re-credited twice",
-  "description": "An 8-day window with capitalization still on day 6. A 2000 AED debit back-dated into day 3 arrives on day 7, after interest has already been credited: four overdraft fees are raised, the old interest credit is reversed and a smaller one posted. Day 8 reverses the debit and the whole chain unwinds.",
+  "name": "Day-7 reversal cascade - interest reversed and re-credited twice, fees permanent",
+  "description": "An 8-day window with capitalization still on day 6. A 2000 AED debit back-dated into day 3 arrives on day 7, after interest has already been credited: four overdraft fees are raised, the old interest credit is reversed and a smaller one posted. Day 8 reverses the debit and interest is restated upwards again - but the four fees do not reverse with it, so the account settles 100 AED below where it would have closed had the debit never arrived.",
   "config": {
     "weekStartDate": "2026-01-01",
     "windowDays": 8,
@@ -83,7 +83,7 @@
       "account": "ACC001",
       "type": "REVERSAL",
       "target": "E6",
-      "note": "day 8: reverses it - four fees reverse and the interest is restated upwards again"
+      "note": "day 8: reverses it - the debit unwinds and interest is restated upwards again, but the four overdraft fees it caused never reverse"
     }
   ],
   "expectations": {
@@ -213,60 +213,60 @@
           {
             "day": 3,
             "assessmentBalance": "1200.00",
-            "closing": "1200.00",
+            "closing": "1175.00",
             "holds": "0.00",
-            "available": "1200.00",
-            "accrual": "0.48",
-            "overdraft": false
+            "available": "1175.00",
+            "accrual": "0.47",
+            "overdraft": true
           },
           {
             "day": 4,
-            "assessmentBalance": "1000.00",
-            "closing": "1000.00",
+            "assessmentBalance": "975.00",
+            "closing": "950.00",
             "holds": "0.00",
-            "available": "1000.00",
-            "accrual": "0.40",
-            "overdraft": false
+            "available": "950.00",
+            "accrual": "0.38",
+            "overdraft": true
           },
           {
             "day": 5,
-            "assessmentBalance": "900.00",
-            "closing": "900.00",
+            "assessmentBalance": "850.00",
+            "closing": "825.00",
             "holds": "0.00",
-            "available": "900.00",
-            "accrual": "0.36",
-            "overdraft": false
+            "available": "825.00",
+            "accrual": "0.33",
+            "overdraft": true
           },
           {
             "day": 6,
-            "closing": "901.92",
-            "closingExInterest": "900.00",
+            "closing": "801.86",
+            "closingExInterest": "800.00",
             "holds": "0.00",
-            "available": "901.92",
-            "accrual": "0.36"
+            "available": "801.86",
+            "accrual": "0.32"
           },
           {
             "day": 7,
-            "closing": "901.92",
+            "closing": "801.86",
             "holds": "0.00",
-            "available": "901.92",
-            "accrual": "0.36"
+            "available": "801.86",
+            "accrual": "0.32"
           },
           {
             "day": 8,
-            "closing": "901.92",
+            "closing": "801.86",
             "holds": "0.00",
-            "available": "901.92",
-            "accrual": "0.36"
+            "available": "801.86",
+            "accrual": "0.32"
           }
         ]
       }
     ],
     "finalInterest": {
-      "ACC001": "1.92"
+      "ACC001": "1.86"
     },
     "netOverdraftFees": {
-      "ACC001": "0.00"
+      "ACC001": "-100.00"
     },
     "overdraftFeeRecordCount": {
       "ACC001": 4

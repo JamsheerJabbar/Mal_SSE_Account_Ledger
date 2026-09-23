@@ -1,7 +1,7 @@
 {
   "id": "iteration-1-baseline",
   "name": "Notes.md baseline - ACC001 AED and ACC002 BHD over 6 days",
-  "description": "The exact stream written out in Notes.md, with the day-by-day figures it states. Covers back-dated reconciliation, two overdraft fees and their reversal, an unknown-auth settlement refusal, a hold refused on available balance, and the BHD installment split with its buffer pay.",
+  "description": "The stream written out in Notes.md, adjusted for the two later design calls: overdraft fees are permanent once assessed (they survive the later reversal of the debit that caused them) and a hold counts purely on its approval state, with no date window. Covers back-dated reconciliation, an unknown-auth settlement refusal, a hold refused on available balance, and the BHD installment split with its buffer pay.",
   "config": {
     "weekStartDate": "2026-01-01",
     "windowDays": 6,
@@ -121,7 +121,7 @@
       "account": "ACC001",
       "type": "REVERSAL",
       "target": "E7",
-      "note": "reverses E7 - everything must return to pre-E7 values"
+      "note": "reverses E7 - the debit unwinds, but the two overdraft fees it caused stand"
     }
   ],
   "expectations": {
@@ -146,8 +146,8 @@
           {
             "day": 1,
             "closing": "250.00",
-            "holds": "0.00",
-            "available": "250.00",
+            "holds": "200.00",
+            "available": "50.00",
             "accrual": "0.10"
           },
           {
@@ -200,8 +200,8 @@
             "day": 2,
             "assessmentBalance": "-370.00",
             "closing": "-395.00",
-            "holds": "200.00",
-            "available": "-595.00",
+            "holds": "0.00",
+            "available": "-395.00",
             "accrual": "0.00",
             "overdraft": true
           },
@@ -209,8 +209,8 @@
             "day": 3,
             "assessmentBalance": "5.00",
             "closing": "5.00",
-            "holds": "200.00",
-            "available": "-195.00",
+            "holds": "0.00",
+            "available": "5.00",
             "accrual": "0.00",
             "overdraft": false
           },
@@ -263,46 +263,46 @@
           {
             "day": 2,
             "assessmentBalance": "250.00",
-            "closing": "250.00",
-            "holds": "200.00",
-            "available": "50.00",
-            "accrual": "0.10",
-            "overdraft": false
+            "closing": "225.00",
+            "holds": "0.00",
+            "available": "225.00",
+            "accrual": "0.09",
+            "overdraft": true
           },
           {
             "day": 3,
-            "assessmentBalance": "650.00",
-            "closing": "650.00",
-            "holds": "200.00",
-            "available": "450.00",
-            "accrual": "0.26",
+            "assessmentBalance": "625.00",
+            "closing": "625.00",
+            "holds": "0.00",
+            "available": "625.00",
+            "accrual": "0.25",
             "overdraft": false
           },
           {
             "day": 4,
-            "assessmentBalance": "465.00",
-            "closing": "465.00",
+            "assessmentBalance": "440.00",
+            "closing": "415.00",
             "holds": "0.00",
-            "available": "465.00",
-            "accrual": "0.18",
-            "overdraft": false
+            "available": "415.00",
+            "accrual": "0.16",
+            "overdraft": true
           },
           {
             "day": 5,
-            "assessmentBalance": "465.00",
-            "closing": "465.00",
+            "assessmentBalance": "415.00",
+            "closing": "415.00",
             "holds": "0.00",
-            "available": "465.00",
-            "accrual": "0.18",
+            "available": "415.00",
+            "accrual": "0.16",
             "overdraft": false
           },
           {
             "day": 6,
-            "closing": "465.82",
-            "closingExInterest": "465.00",
+            "closing": "415.76",
+            "closingExInterest": "415.00",
             "holds": "0.00",
-            "available": "465.82",
-            "accrual": "0.18"
+            "available": "415.76",
+            "accrual": "0.16"
           }
         ]
       },
@@ -322,7 +322,7 @@
       }
     ],
     "finalInterest": {
-      "ACC001": "0.82",
+      "ACC001": "0.76",
       "ACC002": "0.004"
     },
     "authStatus": {
@@ -330,7 +330,7 @@
       "authB": "REJECTED"
     },
     "netOverdraftFees": {
-      "ACC001": "0.00"
+      "ACC001": "-50.00"
     },
     "overdraftFeeRecordCount": {
       "ACC001": 2

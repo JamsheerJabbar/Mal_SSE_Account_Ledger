@@ -1,7 +1,6 @@
 package com.mal.ledger.support;
 
 import com.mal.ledger.domain.Auth;
-import com.mal.ledger.domain.DailyAccount;
 import com.mal.ledger.domain.Transaction;
 import com.mal.ledger.engine.EngineError;
 import com.mal.ledger.engine.LedgerEngine;
@@ -97,11 +96,8 @@ public final class StreamAssertions {
                     failures.add("%s overdraft: expected %s but was %s".formatted(
                             where, expected.overdraft(), actual.overdraftFeeActive()));
                 }
-                if (expected.closingExInterest() != null) {
-                    DailyAccount daily = result.engine().dailyAccount(snapshot.accountId(), expected.day());
-                    compare(failures, where, "closingExInterest", expected.closingExInterest(),
-                            daily == null ? null : daily.closingBalanceExcludingInterest());
-                }
+                compare(failures, where, "closingExInterest",
+                        expected.closingExInterest(), actual.closingExcludingInterest());
             }
         }
     }

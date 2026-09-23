@@ -33,41 +33,41 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AmbiguityChoicesTest {
 
     @Test
-    @DisplayName("accrual rounding: DOWN gives 0.82, HALF_UP gives 0.84 - Notes.md requires DOWN")
+    @DisplayName("accrual rounding: DOWN gives 0.76, HALF_UP gives 0.78 - Notes.md requires DOWN")
     void accrualRoundingMode() {
-        assertEquals(0, new BigDecimal("0.82").compareTo(
+        assertEquals(0, new BigDecimal("0.76").compareTo(
                         Streams.run("iteration-1-baseline").engine().capitalizedInterest("ACC001")),
                 "465.00 x 0.0004 = 0.186 must accrue 0.18, as Notes.md states for days 4 and 5");
 
         StreamRunResult halfUp = runBaselineWith(c -> c.accrualRounding(RoundingMode.HALF_UP));
-        assertEquals(0, new BigDecimal("0.84").compareTo(halfUp.engine().capitalizedInterest("ACC001")),
+        assertEquals(0, new BigDecimal("0.78").compareTo(halfUp.engine().capitalizedInterest("ACC001")),
                 "HALF_UP turns both 0.186 days into 0.19 and credits interest not yet earned");
     }
 
     @Test
-    @DisplayName("accrual remainder: carried into the total (0.82), not discarded from raw (0.83)")
+    @DisplayName("accrual remainder: carried into the total (0.76), not discarded from raw (0.77)")
     void accrualRemainderHandling() {
-        assertEquals(0, new BigDecimal("0.82").compareTo(
+        assertEquals(0, new BigDecimal("0.76").compareTo(
                 Streams.run("iteration-1-baseline").engine().capitalizedInterest("ACC001")));
 
         StreamRunResult discarded = runBaselineWith(c -> c.discardAccrualRemainder(true));
-        assertEquals(0, new BigDecimal("0.83").compareTo(discarded.engine().capitalizedInterest("ACC001")),
-                "recomputing from raw daily figures credits 0.83, which no longer matches "
-                        + "the 0.82 the stored accrual history adds up to");
+        assertEquals(0, new BigDecimal("0.77").compareTo(discarded.engine().capitalizedInterest("ACC001")),
+                "recomputing from raw daily figures credits 0.77, which no longer matches "
+                        + "the 0.76 the stored accrual history adds up to");
     }
 
     @Test
     @DisplayName("interest capitalization excludes its own day - including it is circular")
     void capitalizationWindow() {
         StreamRunResult excluded = Streams.run("iteration-1-baseline");
-        assertEquals(0, new BigDecimal("0.82").compareTo(excluded.engine().capitalizedInterest("ACC001")),
+        assertEquals(0, new BigDecimal("0.76").compareTo(excluded.engine().capitalizedInterest("ACC001")),
                 "days 1-5, as Notes.md states");
         assertEquals(0, new BigDecimal("0.004").compareTo(excluded.engine().capitalizedInterest("ACC002")),
                 "ACC002 only funded on day 5, so only day 5 accrues - confirming day 6 is excluded");
 
         StreamRunResult included = runBaselineWith(c -> c.capitalizationExcludesOwnDay(false));
-        assertEquals(0, new BigDecimal("1.00").compareTo(included.engine().capitalizedInterest("ACC001")),
-                "including day 6 adds its own 0.18 - but day 6's balance now depends on the "
+        assertEquals(0, new BigDecimal("0.92").compareTo(included.engine().capitalizedInterest("ACC001")),
+                "including day 6 adds its own accrual - but day 6's balance now depends on the "
                         + "credit being computed from it");
         assertEquals(0, new BigDecimal("0.008").compareTo(included.engine().capitalizedInterest("ACC002")),
                 "and ACC002 would capitalize 0.008, contradicting the 0.004 Notes.md states");
@@ -78,8 +78,8 @@ class AmbiguityChoicesTest {
     @Test
     @DisplayName("overdraft on days with no movement: Notes.md's figures say no, its prose says yes")
     void overdraftOnQuietDays() {
-        // The figures: day 5 closes at -205 and day 6 raises exactly two reversals,
-        // "for day2 and day4". Day 5 carries the balance without a fee of its own.
+        // The figures: day 5 closes at -205 and exactly two fees are ever charged
+        // (day 2, day 4). Day 5 carries the balance without a fee of its own.
         StreamRunResult byFigures = Streams.run("iteration-1-baseline");
         assertEquals(0, new BigDecimal("-205.00").compareTo(
                 byFigures.day(5).accounts().get(0).closingBalance()));
@@ -92,35 +92,43 @@ class AmbiguityChoicesTest {
                 "charging the quiet day too takes day 5 to -230, not the -205 Notes.md prints");
         assertEquals(3, byProse.engine().overdraftFeeRecordCount("ACC001"));
 
-        // Either way the day-6 reversal restores the same end state - the readings differ
-        // only on what the ledger says mid-week.
-        assertEquals(0, byFigures.engine().account("ACC001").closingLedgerAmount()
-                .compareTo(byProse.engine().account("ACC001").closingLedgerAmount()));
+        // Fees are permanent now (REJECTED.md R2): day 6's reversal undoes E7's debit in
+        // both readings, but it was never going to undo a fee either way. The extra day-5
+        // fee under the prose reading is a real, lasting 25 AED the figures reading never
+        // charges - the two readings settle permanently apart, not at the same end state.
+        assertEquals(0, new BigDecimal("-50.00").compareTo(byFigures.engine().netOverdraftFees("ACC001")));
+        assertEquals(0, new BigDecimal("-75.00").compareTo(byProse.engine().netOverdraftFees("ACC001")));
+        assertNotEquals(0, byFigures.engine().account("ACC001").closingLedgerAmount()
+                        .compareTo(byProse.engine().account("ACC001").closingLedgerAmount()),
+                "25 AED apart at the end of the window, not equal");
     }
 
     @Test
-    @DisplayName("a day is judged before its own fee, so assessment never oscillates")
+    @DisplayName("assessment order no longer self-corrects a fee - fees are permanent either way")
     void assessmentExcludesOwnDayFee() {
-        // Discriminating case: day 2 is charged a fee, then a back-dated credit on day 4
-        // lifts day 2 to +10 before the fee. Judged before its own fee, the fee reverses.
-        // Judged after it, 10 - 25 = -15 keeps the fee alive on a day that is solvent.
+        // This flag used to decide whether a day judged AFTER its own fee could ever
+        // climb back to solvent (it could not: 10 - 25 = -15 reads as still overdrawn,
+        // trapping the fee alive forever). Now that fees never reverse at all (REJECTED.md
+        // R2), that trap cannot arise either way - a fee, once charged, stays regardless
+        // of which balance a later day is judged against. The flag still changes what the
+        // report *displays* as the assessment basis, but not the outcome.
         EventStream base = hysteresisStream(LedgerConfig.builder()
                 .weekStartDate(LocalDate.of(2026, 1, 1)).windowDays(6).capitalizationDay(6).build());
-        StreamRunResult beforeFee = Streams.run(base);
-        assertEquals(0, new BigDecimal("10.00").compareTo(
-                        beforeFee.engine().dailyAccount("ACC001", 2).closingBalance()),
-                "day 2 is solvent again, so its fee is reversed");
-        assertEquals(0, beforeFee.engine().netOverdraftFees("ACC001").compareTo(BigDecimal.ZERO));
+        StreamRunResult excludesOwnFee = Streams.run(base);
+        assertEquals(0, new BigDecimal("-15.00").compareTo(
+                        excludesOwnFee.engine().dailyAccount("ACC001", 2).closingBalance()),
+                "day 2's underlying balance climbs back to +10, but its fee never reverses");
 
         EventStream alternative = hysteresisStream(base.config().toBuilder()
                 .overdraftAssessmentExcludesOwnDayFee(false).build());
-        StreamRunResult afterFee = Streams.run(alternative);
+        StreamRunResult includesOwnFee = Streams.run(alternative);
         assertEquals(0, new BigDecimal("-15.00").compareTo(
-                        afterFee.engine().dailyAccount("ACC001", 2).closingBalance()),
-                "the fee keeps itself alive - the day can never climb out from under it");
-        assertNotEquals(0, afterFee.engine().netOverdraftFees("ACC001").compareTo(BigDecimal.ZERO));
-        assertTrue(afterFee.days().stream().allMatch(d -> d.converged()),
-                "neither reading loops forever, but only one is self-correcting");
+                        includesOwnFee.engine().dailyAccount("ACC001", 2).closingBalance()),
+                "identical outcome under the other reading too - neither one reverses a fee");
+
+        assertEquals(0, excludesOwnFee.engine().netOverdraftFees("ACC001")
+                .compareTo(includesOwnFee.engine().netOverdraftFees("ACC001")),
+                "the two readings no longer diverge at all once a fee has been charged");
     }
 
     @Test

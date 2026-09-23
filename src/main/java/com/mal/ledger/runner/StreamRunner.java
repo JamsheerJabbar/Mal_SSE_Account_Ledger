@@ -83,6 +83,7 @@ public final class StreamRunner {
             history.add(new AccountDayView.LedgerRow(
                     engine.config().dayOfDate(e.getKey()),
                     d.openingBalance(), d.assessmentBalance(), d.closingBalance(),
+                    d.closingBalanceExcludingInterest(),
                     d.activeHoldsTotal(), d.availableBalance(), d.interestAccrual(),
                     d.overdraftEnabled()));
             accrualToDate = accrualToDate.add(d.interestAccrual());
@@ -96,7 +97,7 @@ public final class StreamRunner {
             authStates.add("%s=%s hold=%s vd=d%d%s".formatted(
                     auth.id(), auth.status(), auth.holdAmount().toPlainString(),
                     engine.config().dayOfDate(auth.holdValueDate()),
-                    auth.isActiveOn(date) ? " [active]" : ""));
+                    auth.isActive() ? " [active]" : ""));
         }
 
         return new AccountDayView(
