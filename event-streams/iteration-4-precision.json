@@ -1,0 +1,266 @@
+{
+  "id": "iteration-4-precision",
+  "name": "Currency precision, installment remainders and accrual nullification",
+  "description": "Three accounts at two precisions. Two installment splits whose remainders do not vanish, a BHD overdraft fee on a day that later recovers, and two balances small enough that the daily accrual rounds to zero every single day - the nullification Notes.md flags as an ambiguity, made visible and asserted.",
+  "config": {
+    "weekStartDate": "2026-01-01",
+    "windowDays": 6,
+    "capitalizationDay": 6,
+    "dailyInterestRate": "0.0004",
+    "storeRounding": "HALF_UP",
+    "accrualRounding": "DOWN",
+    "installmentRounding": "DOWN",
+    "capitalizationExcludesOwnDay": true,
+    "overdraftAssessmentExcludesOwnDayFee": true,
+    "overdraftFeeOnDaysWithoutMovement": false,
+    "discardAccrualRemainder": false,
+    "maxRecomputePasses": 16,
+    "overdraftFees": {
+      "AED": "25.00",
+      "BHD": "2.500"
+    }
+  },
+  "accounts": [
+    {
+      "id": "BHD001",
+      "currency": "BHD"
+    },
+    {
+      "id": "BHD002",
+      "currency": "BHD"
+    },
+    {
+      "id": "AED003",
+      "currency": "AED"
+    }
+  ],
+  "events": [
+    {
+      "label": "E1",
+      "day": 1,
+      "valueDay": 1,
+      "account": "BHD001",
+      "type": "INSTALLMENT_CREDIT",
+      "amount": "10",
+      "installments": 3,
+      "note": "10 BHD / 3 -> 3.333 x3 with a 0.001 buffer pay"
+    },
+    {
+      "label": "E2",
+      "day": 1,
+      "valueDay": 1,
+      "account": "BHD002",
+      "type": "CREDIT",
+      "amount": "1.000",
+      "note": "1 BHD accrues 0.0004/day - rounds to zero every day"
+    },
+    {
+      "label": "E3",
+      "day": 1,
+      "valueDay": 1,
+      "account": "AED003",
+      "type": "CREDIT",
+      "amount": "10.00",
+      "note": "10 AED accrues 0.004/day - rounds to zero every day"
+    },
+    {
+      "label": "E4",
+      "day": 3,
+      "valueDay": 3,
+      "account": "BHD001",
+      "type": "INSTALLMENT_CREDIT",
+      "amount": "1.000",
+      "installments": 7,
+      "note": "1 BHD / 7 -> 0.142 x7 with a 0.006 buffer pay"
+    },
+    {
+      "label": "E5",
+      "day": 4,
+      "valueDay": 4,
+      "account": "BHD002",
+      "type": "DEBIT",
+      "amount": "5.000",
+      "note": "drives day 4 overdrawn - 2.500 BHD fee"
+    },
+    {
+      "label": "E6",
+      "day": 5,
+      "valueDay": 5,
+      "account": "BHD002",
+      "type": "CREDIT",
+      "amount": "10.000",
+      "note": "day 5 recovers, but day 4 keeps its fee"
+    }
+  ],
+  "expectations": {
+    "snapshots": [
+      {
+        "afterDay": 6,
+        "account": "BHD001",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "10.000",
+            "holds": "0.000",
+            "available": "10.000",
+            "accrual": "0.004"
+          },
+          {
+            "day": 2,
+            "closing": "10.000",
+            "holds": "0.000",
+            "available": "10.000",
+            "accrual": "0.004"
+          },
+          {
+            "day": 3,
+            "closing": "11.000",
+            "holds": "0.000",
+            "available": "11.000",
+            "accrual": "0.004"
+          },
+          {
+            "day": 4,
+            "closing": "11.000",
+            "holds": "0.000",
+            "available": "11.000",
+            "accrual": "0.004"
+          },
+          {
+            "day": 5,
+            "closing": "11.000",
+            "holds": "0.000",
+            "available": "11.000",
+            "accrual": "0.004"
+          },
+          {
+            "day": 6,
+            "closing": "11.020",
+            "closingExInterest": "11.000",
+            "holds": "0.000",
+            "available": "11.020",
+            "accrual": "0.004"
+          }
+        ]
+      },
+      {
+        "afterDay": 6,
+        "account": "BHD002",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "1.000",
+            "holds": "0.000",
+            "available": "1.000",
+            "accrual": "0.000"
+          },
+          {
+            "day": 2,
+            "closing": "1.000",
+            "holds": "0.000",
+            "available": "1.000",
+            "accrual": "0.000"
+          },
+          {
+            "day": 3,
+            "closing": "1.000",
+            "holds": "0.000",
+            "available": "1.000",
+            "accrual": "0.000"
+          },
+          {
+            "day": 4,
+            "assessmentBalance": "-4.000",
+            "closing": "-6.500",
+            "holds": "0.000",
+            "available": "-6.500",
+            "accrual": "0.000",
+            "overdraft": true
+          },
+          {
+            "day": 5,
+            "assessmentBalance": "3.500",
+            "closing": "3.500",
+            "holds": "0.000",
+            "available": "3.500",
+            "accrual": "0.001",
+            "overdraft": false
+          },
+          {
+            "day": 6,
+            "closing": "3.501",
+            "closingExInterest": "3.500",
+            "holds": "0.000",
+            "available": "3.501",
+            "accrual": "0.001"
+          }
+        ]
+      },
+      {
+        "afterDay": 6,
+        "account": "AED003",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "10.00",
+            "holds": "0.00",
+            "available": "10.00",
+            "accrual": "0.00"
+          },
+          {
+            "day": 5,
+            "closing": "10.00",
+            "holds": "0.00",
+            "available": "10.00",
+            "accrual": "0.00"
+          },
+          {
+            "day": 6,
+            "closing": "10.00",
+            "holds": "0.00",
+            "available": "10.00",
+            "accrual": "0.00"
+          }
+        ]
+      }
+    ],
+    "finalInterest": {
+      "BHD001": "0.020",
+      "BHD002": "0.001",
+      "AED003": "0.00"
+    },
+    "netOverdraftFees": {
+      "BHD002": "-2.500"
+    },
+    "overdraftFeeRecordCount": {
+      "BHD002": 1,
+      "BHD001": 0
+    },
+    "transactions": [
+      {
+        "account": "BHD001",
+        "day": 1,
+        "type": "INSTALLMENT_CREDIT",
+        "amounts": ["3.333", "3.333", "3.333"]
+      },
+      {
+        "account": "BHD001",
+        "day": 1,
+        "type": "BALANCING_ADJUSTMENT",
+        "amounts": ["0.001"]
+      },
+      {
+        "account": "BHD001",
+        "day": 3,
+        "type": "INSTALLMENT_CREDIT",
+        "amounts": ["0.142", "0.142", "0.142", "0.142", "0.142", "0.142", "0.142"]
+      },
+      {
+        "account": "BHD001",
+        "day": 3,
+        "type": "BALANCING_ADJUSTMENT",
+        "amounts": ["0.006"]
+      }
+    ]
+  }
+}

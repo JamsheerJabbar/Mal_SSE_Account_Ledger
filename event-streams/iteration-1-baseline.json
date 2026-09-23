@@ -1,0 +1,367 @@
+{
+  "id": "iteration-1-baseline",
+  "name": "Notes.md baseline - ACC001 AED and ACC002 BHD over 6 days",
+  "description": "The exact stream written out in Notes.md, with the day-by-day figures it states. Covers back-dated reconciliation, two overdraft fees and their reversal, an unknown-auth settlement refusal, a hold refused on available balance, and the BHD installment split with its buffer pay.",
+  "config": {
+    "weekStartDate": "2026-01-01",
+    "windowDays": 6,
+    "capitalizationDay": 6,
+    "dailyInterestRate": "0.0004",
+    "storeRounding": "HALF_UP",
+    "accrualRounding": "DOWN",
+    "installmentRounding": "DOWN",
+    "capitalizationExcludesOwnDay": true,
+    "overdraftAssessmentExcludesOwnDayFee": true,
+    "overdraftFeeOnDaysWithoutMovement": false,
+    "discardAccrualRemainder": false,
+    "maxRecomputePasses": 16,
+    "overdraftFees": {
+      "AED": "25.00",
+      "BHD": "2.500"
+    }
+  },
+  "accounts": [
+    {
+      "id": "ACC001",
+      "currency": "AED"
+    },
+    {
+      "id": "ACC002",
+      "currency": "BHD"
+    }
+  ],
+  "events": [
+    {
+      "label": "E1",
+      "day": 1,
+      "valueDay": 1,
+      "account": "ACC001",
+      "type": "CREDIT",
+      "amount": "1200"
+    },
+    {
+      "label": "E2",
+      "day": 1,
+      "valueDay": 1,
+      "account": "ACC001",
+      "type": "DEBIT",
+      "amount": "950"
+    },
+    {
+      "label": "E3",
+      "day": 2,
+      "valueDay": 2,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "200",
+      "authId": "authA",
+      "note": "hold approved: available 250 covers 200"
+    },
+    {
+      "label": "E4",
+      "day": 3,
+      "valueDay": 3,
+      "account": "ACC001",
+      "type": "CREDIT",
+      "amount": "400"
+    },
+    {
+      "label": "E5",
+      "day": 4,
+      "valueDay": 4,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "185",
+      "authId": "authA",
+      "note": "settles below the 200 hold"
+    },
+    {
+      "label": "E6",
+      "day": 4,
+      "valueDay": 4,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "180",
+      "authId": "authZ",
+      "note": "no auth Z was ever raised - must be refused"
+    },
+    {
+      "label": "E7",
+      "day": 5,
+      "valueDay": 2,
+      "account": "ACC001",
+      "type": "DEBIT",
+      "amount": "620",
+      "note": "back-dated to day 2: forces reconciliation"
+    },
+    {
+      "label": "E8",
+      "day": 5,
+      "valueDay": 5,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "90",
+      "authId": "authB",
+      "note": "refused - available balance is negative after E7"
+    },
+    {
+      "label": "E10",
+      "day": 5,
+      "valueDay": 5,
+      "account": "ACC002",
+      "type": "INSTALLMENT_CREDIT",
+      "amount": "10",
+      "installments": 3,
+      "note": "10 BHD as 3 equal installments plus a buffer pay"
+    },
+    {
+      "label": "E9",
+      "day": 6,
+      "valueDay": 2,
+      "account": "ACC001",
+      "type": "REVERSAL",
+      "target": "E7",
+      "note": "reverses E7 - everything must return to pre-E7 values"
+    }
+  ],
+  "expectations": {
+    "snapshots": [
+      {
+        "afterDay": 1,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "250.00",
+            "holds": "0.00",
+            "available": "250.00",
+            "accrual": "0.10"
+          }
+        ]
+      },
+      {
+        "afterDay": 2,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "250.00",
+            "holds": "0.00",
+            "available": "250.00",
+            "accrual": "0.10"
+          },
+          {
+            "day": 2,
+            "closing": "250.00",
+            "holds": "200.00",
+            "available": "50.00",
+            "accrual": "0.10"
+          }
+        ]
+      },
+      {
+        "afterDay": 3,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 3,
+            "closing": "650.00",
+            "holds": "200.00",
+            "available": "450.00",
+            "accrual": "0.26"
+          }
+        ]
+      },
+      {
+        "afterDay": 4,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 4,
+            "closing": "465.00",
+            "holds": "0.00",
+            "available": "465.00",
+            "accrual": "0.18"
+          }
+        ]
+      },
+      {
+        "afterDay": 5,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "250.00",
+            "holds": "0.00",
+            "available": "250.00",
+            "accrual": "0.10"
+          },
+          {
+            "day": 2,
+            "assessmentBalance": "-370.00",
+            "closing": "-395.00",
+            "holds": "200.00",
+            "available": "-595.00",
+            "accrual": "0.00",
+            "overdraft": true
+          },
+          {
+            "day": 3,
+            "assessmentBalance": "5.00",
+            "closing": "5.00",
+            "holds": "200.00",
+            "available": "-195.00",
+            "accrual": "0.00",
+            "overdraft": false
+          },
+          {
+            "day": 4,
+            "assessmentBalance": "-180.00",
+            "closing": "-205.00",
+            "holds": "0.00",
+            "available": "-205.00",
+            "accrual": "0.00",
+            "overdraft": true
+          },
+          {
+            "day": 5,
+            "assessmentBalance": "-205.00",
+            "closing": "-205.00",
+            "holds": "0.00",
+            "available": "-205.00",
+            "accrual": "0.00",
+            "overdraft": false
+          }
+        ]
+      },
+      {
+        "afterDay": 5,
+        "account": "ACC002",
+        "rows": [
+          {
+            "day": 5,
+            "closing": "10.000",
+            "holds": "0.000",
+            "available": "10.000",
+            "accrual": "0.004"
+          }
+        ]
+      },
+      {
+        "afterDay": 6,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 1,
+            "assessmentBalance": "250.00",
+            "closing": "250.00",
+            "holds": "0.00",
+            "available": "250.00",
+            "accrual": "0.10",
+            "overdraft": false
+          },
+          {
+            "day": 2,
+            "assessmentBalance": "250.00",
+            "closing": "250.00",
+            "holds": "200.00",
+            "available": "50.00",
+            "accrual": "0.10",
+            "overdraft": false
+          },
+          {
+            "day": 3,
+            "assessmentBalance": "650.00",
+            "closing": "650.00",
+            "holds": "200.00",
+            "available": "450.00",
+            "accrual": "0.26",
+            "overdraft": false
+          },
+          {
+            "day": 4,
+            "assessmentBalance": "465.00",
+            "closing": "465.00",
+            "holds": "0.00",
+            "available": "465.00",
+            "accrual": "0.18",
+            "overdraft": false
+          },
+          {
+            "day": 5,
+            "assessmentBalance": "465.00",
+            "closing": "465.00",
+            "holds": "0.00",
+            "available": "465.00",
+            "accrual": "0.18",
+            "overdraft": false
+          },
+          {
+            "day": 6,
+            "closing": "465.82",
+            "closingExInterest": "465.00",
+            "holds": "0.00",
+            "available": "465.82",
+            "accrual": "0.18"
+          }
+        ]
+      },
+      {
+        "afterDay": 6,
+        "account": "ACC002",
+        "rows": [
+          {
+            "day": 6,
+            "closing": "10.004",
+            "closingExInterest": "10.000",
+            "holds": "0.000",
+            "available": "10.004",
+            "accrual": "0.004"
+          }
+        ]
+      }
+    ],
+    "finalInterest": {
+      "ACC001": "0.82",
+      "ACC002": "0.004"
+    },
+    "authStatus": {
+      "authA": "SETTLED",
+      "authB": "REJECTED"
+    },
+    "netOverdraftFees": {
+      "ACC001": "0.00"
+    },
+    "overdraftFeeRecordCount": {
+      "ACC001": 2
+    },
+    "minRecomputePasses": {
+      "5": 2,
+      "6": 2
+    },
+    "errors": [
+      {
+        "event": "E6",
+        "code": "UNKNOWN_AUTH"
+      },
+      {
+        "event": "E8",
+        "code": "INSUFFICIENT_AVAILABLE_BALANCE"
+      }
+    ],
+    "transactions": [
+      {
+        "account": "ACC002",
+        "day": 5,
+        "type": "INSTALLMENT_CREDIT",
+        "amounts": ["3.333", "3.333", "3.333"]
+      },
+      {
+        "account": "ACC002",
+        "day": 5,
+        "type": "BALANCING_ADJUSTMENT",
+        "amounts": ["0.001"]
+      }
+    ]
+  }
+}

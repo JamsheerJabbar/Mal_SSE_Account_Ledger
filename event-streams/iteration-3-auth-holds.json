@@ -1,0 +1,298 @@
+{
+  "id": "iteration-3-auth-holds",
+  "name": "Authorization and hold lifecycle - every rejection path",
+  "description": "No back-dating and no overdraft: this iteration isolates the auth rules. Holds approved at positive and at exactly zero headroom, a hold refused, settlements refused for exceeding the hold, for a rejected auth, for an already-settled auth and for an unknown auth id, and a hold left open at the end of the window.",
+  "config": {
+    "weekStartDate": "2026-01-01",
+    "windowDays": 6,
+    "capitalizationDay": 6,
+    "dailyInterestRate": "0.0004",
+    "storeRounding": "HALF_UP",
+    "accrualRounding": "DOWN",
+    "installmentRounding": "DOWN",
+    "capitalizationExcludesOwnDay": true,
+    "overdraftAssessmentExcludesOwnDayFee": true,
+    "overdraftFeeOnDaysWithoutMovement": false,
+    "discardAccrualRemainder": false,
+    "maxRecomputePasses": 16,
+    "overdraftFees": {
+      "AED": "25.00",
+      "BHD": "2.500"
+    }
+  },
+  "accounts": [
+    {
+      "id": "ACC001",
+      "currency": "AED"
+    }
+  ],
+  "events": [
+    {
+      "label": "E1",
+      "day": 1,
+      "valueDay": 1,
+      "account": "ACC001",
+      "type": "CREDIT",
+      "amount": "500"
+    },
+    {
+      "label": "E2",
+      "day": 1,
+      "valueDay": 1,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "200",
+      "authId": "authA",
+      "note": "approved: 500 - 0 - 200 = 300"
+    },
+    {
+      "label": "E3",
+      "day": 2,
+      "valueDay": 2,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "400",
+      "authId": "authB",
+      "note": "refused: 500 - 200 - 400 = -100"
+    },
+    {
+      "label": "E4",
+      "day": 2,
+      "valueDay": 2,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "300",
+      "authId": "authC",
+      "note": "approved at exactly zero headroom"
+    },
+    {
+      "label": "E5",
+      "day": 3,
+      "valueDay": 3,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "250",
+      "authId": "authA",
+      "note": "refused: settlement exceeds the 200 hold"
+    },
+    {
+      "label": "E6",
+      "day": 3,
+      "valueDay": 3,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "200",
+      "authId": "authA",
+      "note": "settles in full"
+    },
+    {
+      "label": "E7",
+      "day": 4,
+      "valueDay": 4,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "50",
+      "authId": "authA",
+      "note": "refused: authA already settled"
+    },
+    {
+      "label": "E8",
+      "day": 4,
+      "valueDay": 4,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "100",
+      "authId": "authB",
+      "note": "refused: authB was never approved"
+    },
+    {
+      "label": "E9",
+      "day": 4,
+      "valueDay": 4,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "300",
+      "authId": "authC",
+      "note": "settles, taking the ledger to exactly zero"
+    },
+    {
+      "label": "E10",
+      "day": 5,
+      "valueDay": 5,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "10",
+      "authId": "authD",
+      "note": "refused: nothing available"
+    },
+    {
+      "label": "E11",
+      "day": 5,
+      "valueDay": 5,
+      "account": "ACC001",
+      "type": "CREDIT",
+      "amount": "100"
+    },
+    {
+      "label": "E12",
+      "day": 5,
+      "valueDay": 5,
+      "account": "ACC001",
+      "type": "AUTH",
+      "amount": "100",
+      "authId": "authE",
+      "note": "approved; never settled in this window"
+    },
+    {
+      "label": "E13",
+      "day": 6,
+      "valueDay": 6,
+      "account": "ACC001",
+      "type": "SETTLEMENT",
+      "amount": "5",
+      "authId": "authZZ",
+      "note": "refused: unknown auth id"
+    }
+  ],
+  "expectations": {
+    "snapshots": [
+      {
+        "afterDay": 1,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "500.00",
+            "holds": "200.00",
+            "available": "300.00",
+            "accrual": "0.20"
+          }
+        ]
+      },
+      {
+        "afterDay": 2,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 2,
+            "closing": "500.00",
+            "holds": "500.00",
+            "available": "0.00",
+            "accrual": "0.20"
+          }
+        ]
+      },
+      {
+        "afterDay": 3,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 1,
+            "closing": "500.00",
+            "holds": "200.00",
+            "available": "300.00",
+            "accrual": "0.20"
+          },
+          {
+            "day": 2,
+            "closing": "500.00",
+            "holds": "500.00",
+            "available": "0.00",
+            "accrual": "0.20"
+          },
+          {
+            "day": 3,
+            "closing": "300.00",
+            "holds": "300.00",
+            "available": "0.00",
+            "accrual": "0.12"
+          }
+        ]
+      },
+      {
+        "afterDay": 4,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 4,
+            "assessmentBalance": "0.00",
+            "closing": "0.00",
+            "holds": "0.00",
+            "available": "0.00",
+            "accrual": "0.00",
+            "overdraft": false
+          }
+        ]
+      },
+      {
+        "afterDay": 5,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 5,
+            "closing": "100.00",
+            "holds": "100.00",
+            "available": "0.00",
+            "accrual": "0.04"
+          }
+        ]
+      },
+      {
+        "afterDay": 6,
+        "account": "ACC001",
+        "rows": [
+          {
+            "day": 6,
+            "closing": "100.56",
+            "closingExInterest": "100.00",
+            "holds": "100.00",
+            "available": "0.56",
+            "accrual": "0.04"
+          }
+        ]
+      }
+    ],
+    "finalInterest": {
+      "ACC001": "0.56"
+    },
+    "authStatus": {
+      "authA": "SETTLED",
+      "authB": "REJECTED",
+      "authC": "SETTLED",
+      "authD": "REJECTED",
+      "authE": "APPROVED"
+    },
+    "netOverdraftFees": {
+      "ACC001": "0.00"
+    },
+    "overdraftFeeRecordCount": {
+      "ACC001": 0
+    },
+    "errors": [
+      {
+        "event": "E3",
+        "code": "INSUFFICIENT_AVAILABLE_BALANCE"
+      },
+      {
+        "event": "E5",
+        "code": "SETTLEMENT_EXCEEDS_AUTH"
+      },
+      {
+        "event": "E7",
+        "code": "AUTH_ALREADY_SETTLED"
+      },
+      {
+        "event": "E8",
+        "code": "AUTH_NOT_APPROVED"
+      },
+      {
+        "event": "E10",
+        "code": "INSUFFICIENT_AVAILABLE_BALANCE"
+      },
+      {
+        "event": "E13",
+        "code": "UNKNOWN_AUTH"
+      }
+    ]
+  }
+}
